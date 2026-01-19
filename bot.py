@@ -2,314 +2,469 @@ import os
 import requests
 import time
 import json
-import re
+import hashlib
 from datetime import datetime, timedelta
+from pathlib import Path
 
-class VideoJobHunter:
+class SmartVideoJobBot:
     def __init__(self):
-        # ⚠️ الأمان: التوكنات من Environment فقط
+        # ========== الإعدادات الأساسية ==========
         self.telegram_token = os.environ.get('TELEGRAM_TOKEN')
         self.chat_id = os.environ.get('CHAT_ID', '8497315428')
         self.base_url = f"https://api.telegram.org/bot{self.telegram_token}"
         
-        # ✅ مصادر متنوعة (لتجنب الاعتماد على مصدر واحد)
-        self.platforms = {
-            'remoteok': 'https://remoteok.io/api?tag=video',
-            'weworkremotely': 'https://weworkremotely.com/categories/remote-design-jobs.json',
-            'flexjobs': 'https://www.flexjobs.com/search?search=video+editing',
-            'dribbble': 'https://dribbble.com/jobs?q=video+editor',
-            'github': 'https://jobs.github.com/positions.json?description=video',
-            'indeed': 'https://www.indeed.com/jobs?q=video+editor&l=remote'
+        # ========== ملف التتبع (مهم جداً!) ==========
+        self.db_file = Path('job_database.json')
+        self.job_db = self.load_database()
+        
+        # ========== المنصات الموثوقة فقط ==========
+        self.api_sources = {
+            'remoteok': {
+                'url': 'https://remoteok.io/api',
+                'active': True
+            }
         }
         
-        # ✅ كلمات بحث متنوعة
-        self.keywords = [
-            # مصطلحات دولية
-            'video editor', 'video editing', 'motion graphics',
-            'after effects', 'premiere pro', 'final cut pro',
-            'video production', 'video post-production',
-            'ai video', 'text to video', 'video ai',
-            'background removal', 'product video',
-            
-            # مصطلحات عربية
-            'مونتاج', 'محرر فيديو', 'تصميم فيديو',
-            'موشن جرافيك', 'انيميشن', 'مصمم فيديو'
+        # ========== كلمات مفتاحية دقيقة جداً ==========
+        self.required_keywords = [
+            'video editor',
+            'video editing',
+            'motion graphics',
+            'motion designer',
+            'video producer',
+            'video production',
+            'post production',
+            'post-production'
         ]
         
-        # ⏱️ إضافة تأخيرات عشوائية لتجنب الحظر
-        self.delays = [2, 3, 4, 5, 6]
+        # كلمات داعمة (لزيادة الدقة)
+        self.support_keywords = [
+            'premiere',
+            'after effects',
+            'final cut',
+            'davinci',
+            'resolve',
+            'avid',
+            'video content',
+            'video specialist'
+        ]
         
-    def safe_request(self, url, platform_name):
-        """طلب آمن مع تأخيرات عشوائية"""
+        # ========== كلمات استبعاد قوية ==========
+        self.exclude_keywords = [
+            # وظائف برمجة
+            'software engineer', 'developer', 'programmer', 'backend', 'frontend',
+            'full stack', 'devops', 'ios', 'android', 'react', 'python', 'java',
+            'data scientist', 'machine learning', 'ai engineer', 'ml engineer',
+            
+            # وظائف إدارة
+            'product manager', 'project manager', 'account manager', 'sales manager',
+            'marketing manager', 'business development', 'customer success',
+            
+            # وظائف أخرى
+            'recruiter', 'hr manager', 'accountant', 'financial analyst',
+            'content writer', 'copywriter', 'seo specialist'
+        ]
+        
+        # ========== إحصائيات ==========
+        self.stats = {
+            'total_checked': 0,
+            'passed_filter': 0,
+            'already_sent': 0,
+            'newly_sent': 0
+        }
+    
+    # ==================== إدارة قاعدة البيانات ====================
+    
+    def load_database(self):
+        """تحميل قاعدة بيانات الوظائف المرسلة"""
         try:
-            # تأخير عشوائي
-            time.sleep(self.delays[platform_name.__hash__() % len(self.delays)])
-            
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'application/json',
-                'Accept-Language': 'en-US,en;q=0.9'
-            }
-            
-            response = requests.get(url, headers=headers, timeout=30)
-            
-            # ⚠️ التحقق من حالة الاستجابة
-            if response.status_code == 429:  # Too Many Requests
-                print(f"⚠️ حظر مؤقت من {platform_name}، انتظر 60 ثانية")
-                time.sleep(60)
-                return None
+            if self.db_file.exists():
+                with open(self.db_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
                 
-            return response
+                # تنظيف تلقائي: حذف الوظائف الأقدم من 10 أيام
+                cutoff = (datetime.now() - timedelta(days=10)).isoformat()
+                cleaned_data = {
+                    k: v for k, v in data.items() 
+                    if v.get('sent_at', '') > cutoff
+                }
+                
+                # حفظ البيانات المنظفة
+                if len(cleaned_data) < len(data):
+                    self.save_database(cleaned_data)
+                    print(f"🧹 تنظيف قاعدة البيانات: {len(data)} → {len(cleaned_data)} وظيفة")
+                
+                return cleaned_data
+            
+            return {}
         except Exception as e:
-            print(f"❌ خطأ في {platform_name}: {e}")
-            return None
+            print(f"⚠️ خطأ في تحميل قاعدة البيانات: {e}")
+            return {}
+    
+    def save_database(self, data=None):
+        """حفظ قاعدة البيانات"""
+        try:
+            if data is None:
+                data = self.job_db
+            
+            with open(self.db_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"⚠️ خطأ في حفظ قاعدة البيانات: {e}")
+    
+    def generate_unique_id(self, title, company, url):
+        """إنشاء معرّف فريد للوظيفة"""
+        # استخدام URL كمعرف أساسي (الأكثر موثوقية)
+        if url:
+            return hashlib.md5(url.encode()).hexdigest()
+        
+        # بديل: استخدام العنوان + الشركة
+        unique_str = f"{title.lower().strip()}{company.lower().strip()}"
+        return hashlib.md5(unique_str.encode()).hexdigest()
+    
+    def is_job_already_sent(self, job_id):
+        """فحص إذا تم إرسال الوظيفة مسبقاً"""
+        return job_id in self.job_db
+    
+    def mark_job_as_sent(self, job_id, job_info):
+        """تسجيل الوظيفة كمرسلة"""
+        self.job_db[job_id] = {
+            'title': job_info.get('title', ''),
+            'company': job_info.get('company', ''),
+            'url': job_info.get('url', ''),
+            'sent_at': datetime.now().isoformat(),
+            'platform': job_info.get('platform', '')
+        }
+        self.save_database()
+    
+    # ==================== الفلترة الذكية ====================
+    
+    def is_valid_video_job(self, title, description=''):
+        """فحص صارم: هل هذه وظيفة فيديو حقيقية؟"""
+        title_lower = title.lower().strip()
+        desc_lower = description.lower()[:500]  # فحص أول 500 حرف فقط
+        combined = f"{title_lower} {desc_lower}"
+        
+        # ========== خطوة 1: استبعاد الوظائف غير المناسبة ==========
+        for exclude_word in self.exclude_keywords:
+            if exclude_word in combined:
+                print(f"   ❌ استبعاد: يحتوي على '{exclude_word}'")
+                return False
+        
+        # ========== خطوة 2: يجب وجود كلمة مفتاحية أساسية ==========
+        has_required = False
+        for keyword in self.required_keywords:
+            if keyword in title_lower:
+                has_required = True
+                print(f"   ✅ كلمة مطلوبة: '{keyword}'")
+                break
+        
+        if not has_required:
+            # فحص في الوصف أيضاً
+            for keyword in self.required_keywords:
+                if keyword in desc_lower:
+                    has_required = True
+                    print(f"   ✅ كلمة مطلوبة في الوصف: '{keyword}'")
+                    break
+        
+        if not has_required:
+            print(f"   ❌ رفض: لا تحتوي على كلمات مفتاحية مطلوبة")
+            return False
+        
+        # ========== خطوة 3 (اختيارية): التحقق من الكلمات الداعمة ==========
+        # هذا يزيد من الثقة ولكن ليس إلزامياً
+        has_support = any(word in combined for word in self.support_keywords)
+        if has_support:
+            print(f"   ⭐ وظيفة قوية: تحتوي على كلمات داعمة")
+        
+        return True
+    
+    # ==================== البحث في المنصات ====================
+    
+    def safe_api_call(self, url, platform_name, max_retries=2):
+        """طلب API آمن مع إعادة المحاولة"""
+        for attempt in range(max_retries):
+            try:
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'application/json',
+                    'Accept-Language': 'en-US,en;q=0.9'
+                }
+                
+                response = requests.get(url, headers=headers, timeout=30)
+                
+                # معالجة حظر API
+                if response.status_code == 429:
+                    wait_time = 60 * (attempt + 1)
+                    print(f"   ⏳ Rate limit من {platform_name}، انتظار {wait_time}ث...")
+                    time.sleep(wait_time)
+                    continue
+                
+                if response.status_code == 200:
+                    return response
+                else:
+                    print(f"   ⚠️ استجابة غير متوقعة: {response.status_code}")
+                    
+            except requests.exceptions.Timeout:
+                print(f"   ⏱️ انتهى الوقت في المحاولة {attempt + 1}")
+            except Exception as e:
+                print(f"   ❌ خطأ في المحاولة {attempt + 1}: {e}")
+            
+            if attempt < max_retries - 1:
+                time.sleep(5)
+        
+        return None
     
     def search_remoteok(self):
-        """بحث في RemoteOK"""
+        """البحث في RemoteOK API"""
         jobs = []
+        platform_name = 'RemoteOK'
+        
+        print(f"\n🔍 البحث في {platform_name}...")
+        
         try:
-            url = self.platforms['remoteok']
-            response = self.safe_request(url, 'remoteok')
+            url = self.api_sources['remoteok']['url']
+            response = self.safe_api_call(url, platform_name)
             
-            if response and response.status_code == 200:
-                data = response.json()
-                for job in data[1:]:  # تخطي العنصر الأول
-                    title = job.get('position', '').lower()
+            if not response:
+                print(f"   ❌ فشل الاتصال بـ {platform_name}")
+                return jobs
+            
+            data = response.json()
+            print(f"   📊 تم جلب {len(data)} عنصر من API")
+            
+            # تخطي العنصر الأول (metadata)
+            job_listings = data[1:] if len(data) > 1 else []
+            
+            for idx, job in enumerate(job_listings[:100], 1):  # فحص أول 100 وظيفة
+                try:
+                    title = job.get('position', '')
+                    company = job.get('company', '')
+                    url_link = job.get('url', '')
+                    description = job.get('description', '')
                     
-                    # ✅ فلترة ذكية
-                    if any(keyword in title for keyword in self.keywords):
-                        job_info = {
-                            'platform': 'RemoteOK',
-                            'title': job.get('position', ''),
-                            'company': job.get('company', ''),
-                            'url': job.get('url', ''),
-                            'description': job.get('description', '')[:200] + '...',
-                            'salary': job.get('salary', 'غير محدد'),
-                            'tags': job.get('tags', [])
-                        }
-                        jobs.append(job_info)
-        except Exception as e:
-            print(f"Error RemoteOK: {e}")
-        
-        return jobs
-    
-    def search_github_jobs(self):
-        """بحث في GitHub Jobs"""
-        jobs = []
-        try:
-            url = self.platforms['github']
-            response = self.safe_request(url, 'github')
-            
-            if response and response.status_code == 200:
-                data = response.json()
-                for job in data:
-                    title = job.get('title', '').lower()
-                    desc = job.get('description', '').lower()
+                    if not title or not company:
+                        continue
                     
-                    if any(keyword in title or keyword in desc for keyword in self.keywords):
-                        job_info = {
-                            'platform': 'GitHub Jobs',
-                            'title': job.get('title', ''),
-                            'company': job.get('company', ''),
-                            'url': job.get('url', ''),
-                            'location': job.get('location', 'Remote'),
-                            'type': job.get('type', 'Full-time')
-                        }
-                        jobs.append(job_info)
-        except Exception as e:
-            print(f"Error GitHub Jobs: {e}")
-        
-        return jobs
-    
-    def search_flexjobs(self):
-        """بحث في FlexJobs (مثال للويب سكرابينج الآمن)"""
-        jobs = []
-        try:
-            url = self.platforms['flexjobs']
-            response = self.safe_request(url, 'flexjobs')
-            
-            if response and response.status_code == 200:
-                # استخدام regex للبحث عن وظائف فيديو
-                content = response.text.lower()
-                
-                # البحث عن أنماط
-                video_patterns = [
-                    r'video editor.*?\$(\d+)',
-                    r'motion graphic.*?remote',
-                    r'video production.*?contract',
-                    r'video.*?edit.*?remote'
-                ]
-                
-                for pattern in video_patterns:
-                    matches = re.findall(pattern, content, re.DOTALL)
-                    if matches:
-                        job_info = {
-                            'platform': 'FlexJobs',
-                            'title': 'Video Editor Position',
-                            'url': url,
-                            'found_pattern': pattern
-                        }
-                        jobs.append(job_info)
-        except Exception as e:
-            print(f"Error FlexJobs: {e}")
-        
-        return jobs
-    
-    def search_custom_sources(self):
-        """بحث في مصادر مخصصة آمنة"""
-        jobs = []
-        
-        # ⚠️ مصادر بديلة آمنة
-        custom_sources = [
-            {
-                'name': 'Video Editing Subreddits',
-                'url': 'https://www.reddit.com/r/videoediting/hot.json?limit=5',
-                'type': 'json'
-            },
-            {
-                'name': 'Creative Market',
-                'url': 'https://creativemarket.com/jobs?category=video',
-                'type': 'html'
-            },
-            {
-                'name': '99designs',
-                'url': 'https://99designs.com/jobs?skills=video-editing',
-                'type': 'html'
-            }
-        ]
-        
-        for source in custom_sources:
-            try:
-                response = self.safe_request(source['url'], source['name'])
-                if response and response.status_code == 200:
-                    # هنا يمكنك إضافة معالجة خاصة لكل مصدر
+                    self.stats['total_checked'] += 1
+                    
+                    # عرض معلومات الفحص
+                    print(f"\n   [{idx}] فحص: {title[:50]}...")
+                    
+                    # ========== الفلترة الصارمة ==========
+                    if not self.is_valid_video_job(title, description):
+                        continue
+                    
+                    self.stats['passed_filter'] += 1
+                    
+                    # ========== فحص التكرار ==========
+                    job_id = self.generate_unique_id(title, company, url_link)
+                    
+                    if self.is_job_already_sent(job_id):
+                        print(f"   ⏭️ تم إرسالها مسبقاً")
+                        self.stats['already_sent'] += 1
+                        continue
+                    
+                    # ========== وظيفة جديدة وصالحة! ==========
                     job_info = {
-                        'platform': source['name'],
-                        'title': f'Video Jobs on {source["name"]}',
-                        'url': source['url'],
-                        'status': 'Active'
+                        'id': job_id,
+                        'platform': platform_name,
+                        'title': title,
+                        'company': company,
+                        'url': url_link,
+                        'description': description[:400] + '...' if len(description) > 400 else description,
+                        'salary': job.get('salary_max', job.get('salary', 'غير محدد')),
+                        'tags': ', '.join(job.get('tags', [])[:5]),
+                        'location': job.get('location', 'Remote'),
+                        'posted_date': job.get('date', 'غير محدد')
                     }
+                    
                     jobs.append(job_info)
-            except Exception as e:
-                print(f"Error {source['name']}: {e}")
+                    print(f"   ✅ وظيفة صالحة وجديدة!")
+                    
+                except Exception as e:
+                    print(f"   ⚠️ خطأ في معالجة وظيفة: {e}")
+                    continue
+            
+            print(f"\n✅ {platform_name}: وجدنا {len(jobs)} وظيفة جديدة صالحة")
+            
+        except Exception as e:
+            print(f"❌ خطأ عام في {platform_name}: {e}")
         
         return jobs
     
-    def format_job_message(self, job):
-        """تنسيق رسالة الوظيفة"""
+    # ==================== إرسال تليجرام ====================
+    
+    def format_message(self, job):
+        """تنسيق رسالة احترافية"""
         message = f"""
 🎬 <b>وظيفة فيديو جديدة!</b>
 
 📌 <b>المنصة:</b> {job['platform']}
-🏷️ <b>المسمى:</b> {job.get('title', 'Video Editor')}
-🏢 <b>الشركة:</b> {job.get('company', 'غير محدد')}
-💰 <b>الراتب:</b> {job.get('salary', 'متفاوض عليه')}
-📍 <b>المكان:</b> {job.get('location', 'عن بعد')}
+🏷️ <b>المسمى الوظيفي:</b> {job['title']}
+🏢 <b>الشركة:</b> {job['company']}
+💰 <b>الراتب:</b> {job.get('salary', 'غير محدد')}
+📍 <b>الموقع:</b> {job.get('location', 'Remote')}
+🏷️ <b>المهارات:</b> {job.get('tags', 'غير محدد')}
 
-📝 <b>الوصف:</b>
-{job.get('description', 'تفاصيل الوظيفة متاحة على الرابط')}
+📝 <b>نبذة:</b>
+{job['description']}
 
 🔗 <b>رابط التقديم:</b>
-{job.get('url', 'https://example.com')}
+{job['url']}
 
-⏰ <b>وقت الاكتشاف:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+⏰ <b>تاريخ الاكتشاف:</b> {datetime.now().strftime('%Y-%m-%d %H:%M')}
+
+<i>🤖 تم اكتشافها تلقائياً بواسطة Video Job Bot</i>
 """
-        return message
+        return message.strip()
     
-    def send_to_telegram(self, message):
-        """إرسال إلى تليجرام"""
+    def send_telegram(self, message, retry=True):
+        """إرسال رسالة تليجرام مع معالجة الأخطاء"""
         try:
             url = f"{self.base_url}/sendMessage"
             payload = {
                 'chat_id': self.chat_id,
                 'text': message,
                 'parse_mode': 'HTML',
-                'disable_web_page_preview': False
+                'disable_web_page_preview': True
             }
             
-            response = requests.post(url, json=payload, timeout=10)
+            response = requests.post(url, json=payload, timeout=15)
             
-            # ⚠️ التحقق من حظر تليجرام
+            # معالجة Rate Limit
             if response.status_code == 429:
-                retry_after = response.json().get('parameters', {}).get('retry_after', 30)
-                print(f"⏳ تليجرام يطلب الانتظار: {retry_after} ثانية")
-                time.sleep(retry_after + 5)
+                if retry:
+                    retry_after = response.json().get('parameters', {}).get('retry_after', 30)
+                    print(f"   ⏳ Telegram rate limit: انتظار {retry_after}ث")
+                    time.sleep(retry_after + 2)
+                    return self.send_telegram(message, retry=False)
                 return False
-                
-            return response.status_code == 200
+            
+            if response.status_code != 200:
+                print(f"   ⚠️ Telegram error: {response.text}")
+                return False
+            
+            return True
+            
         except Exception as e:
-            print(f"❌ خطأ تليجرام: {e}")
+            print(f"   ❌ خطأ إرسال Telegram: {e}")
             return False
     
-    def run_search_cycle(self):
-        """دورة بحث كاملة"""
+    # ==================== التشغيل الرئيسي ====================
+    
+    def run(self):
+        """تشغيل البوت"""
+        print("\n" + "="*70)
+        print("🤖 Video Job Hunter Bot - النسخة النهائية v3.0")
+        print("="*70)
+        print(f"⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"💾 قاعدة البيانات: {len(self.job_db)} وظيفة محفوظة")
+        print("="*70)
+        
+        # ========== البحث في المنصات ==========
         all_jobs = []
         
-        print("🚀 بدء البحث عن وظائف الفيديو...")
-        
-        # 🔍 البحث في كل المنصات
-        search_methods = [
+        # يمكنك إضافة منصات أخرى هنا
+        search_functions = [
             self.search_remoteok,
-            self.search_github_jobs,
-            self.search_flexjobs,
-            self.search_custom_sources
+            # self.search_other_platform,  # أضف منصات أخرى
         ]
         
-        for method in search_methods:
+        for search_func in search_functions:
             try:
-                print(f"🔍 البحث في: {method.__name__}")
-                jobs = method()
+                jobs = search_func()
                 all_jobs.extend(jobs)
-                
-                # تأخير بين المنصات
-                time.sleep(5)
+                time.sleep(5)  # تأخير بين المنصات
             except Exception as e:
-                print(f"⚠️ خطأ في {method.__name__}: {e}")
-                continue
+                print(f"❌ خطأ في {search_func.__name__}: {e}")
         
-        # 📤 إرسال النتائج
-        if all_jobs:
-            print(f"✅ تم العثور على {len(all_jobs)} وظيفة")
-            
-            # إرسال رسالة تجميعية أولى
-            self.send_to_telegram(f"🎯 <b>تم العثور على {len(all_jobs)} وظيفة فيديو جديدة!</b>")
+        # ========== عرض الإحصائيات ==========
+        print("\n" + "="*70)
+        print("📊 إحصائيات البحث:")
+        print(f"   🔍 إجمالي الوظائف المفحوصة: {self.stats['total_checked']}")
+        print(f"   ✅ نجحت في الفلترة: {self.stats['passed_filter']}")
+        print(f"   ⏭️ مرسلة مسبقاً: {self.stats['already_sent']}")
+        print(f"   🆕 وظائف جديدة: {len(all_jobs)}")
+        print("="*70)
+        
+        # ========== إرسال الوظائف ==========
+        if len(all_jobs) > 0:
+            # رسالة افتتاحية
+            summary = f"🎯 <b>تم اكتشاف {len(all_jobs)} وظيفة فيديو جديدة!</b>\n\n"
+            summary += f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+            self.send_telegram(summary)
             time.sleep(2)
             
             # إرسال كل وظيفة
-            for i, job in enumerate(all_jobs[:10]):  # الحد: 10 وظائف لكل دورة
-                message = self.format_job_message(job)
-                self.send_to_telegram(message)
+            for i, job in enumerate(all_jobs[:10], 1):  # حد أقصى 10 وظائف
+                print(f"\n📤 إرسال الوظيفة {i}/{len(all_jobs)}: {job['title'][:40]}...")
                 
-                # تأخير بين الرسائل
-                if i < len(all_jobs) - 1:
-                    time.sleep(3)
-        else:
-            print("⚠️ لم يتم العثور على وظائف هذه الدورة")
-            self.send_to_telegram("⚠️ <b>لم يتم العثور على وظائف فيديو جديدة هذه الدورة</b>")
+                message = self.format_message(job)
+                
+                if self.send_telegram(message):
+                    self.mark_job_as_sent(job['id'], job)
+                    self.stats['newly_sent'] += 1
+                    print(f"   ✅ تم الإرسال بنجاح")
+                    time.sleep(3)  # تأخير بين الرسائل
+                else:
+                    print(f"   ❌ فشل الإرسال")
+            
+            print(f"\n✅ تم إرسال {self.stats['newly_sent']} وظيفة بنجاح")
         
-        return len(all_jobs)
+        else:
+            print("\nℹ️ لا توجد وظائف جديدة في هذه الدورة")
+            
+            # إرسال تنبيه فقط مرة كل 12 ساعة
+            last_alert = self.job_db.get('_last_no_jobs_alert', {})
+            last_alert_time = last_alert.get('time', '')
+            
+            if not last_alert_time or \
+               (datetime.now() - datetime.fromisoformat(last_alert_time)).total_seconds() > 43200:
+                self.send_telegram("ℹ️ <b>لا توجد وظائف فيديو جديدة حالياً</b>\n\n<i>سيتم البحث مجدداً في الدورة القادمة</i>")
+                self.job_db['_last_no_jobs_alert'] = {'time': datetime.now().isoformat()}
+                self.save_database()
+        
+        # ========== النتيجة النهائية ==========
+        print("\n" + "="*70)
+        print(f"✅ اكتملت الدورة بنجاح")
+        print(f"📊 النتائج:")
+        print(f"   • وظائف جديدة تم إرسالها: {self.stats['newly_sent']}")
+        print(f"   • إجمالي قاعدة البيانات: {len(self.job_db)} وظيفة")
+        print("="*70 + "\n")
+        
+        return self.stats['newly_sent']
+
+
+# ==================== التشغيل ====================
 
 def main():
     """الدالة الرئيسية"""
-    print("=" * 50)
-    print("🤖 بوت البحث عن وظائف الفيديو - الإصدار الآمن")
-    print("=" * 50)
     
-    # التحقق من التوكنات
+    # التحقق من التوكن
     if not os.environ.get('TELEGRAM_TOKEN'):
-        print("❌ خطأ: TELEGRAM_TOKEN غير موجود")
+        print("\n" + "❌"*30)
+        print("خطأ فادح: TELEGRAM_TOKEN غير موجود!")
+        print("\nالحل:")
+        print("  export TELEGRAM_TOKEN='your_bot_token_here'")
+        print("  export CHAT_ID='your_chat_id'")
+        print("❌"*30 + "\n")
         return
     
-    # إنشاء وتشغيل البوت
-    bot = VideoJobHunter()
-    
-    # تشغيل دورة البحث
-    jobs_found = bot.run_search_cycle()
-    
-    print(f"\n{'='*50}")
-    print(f"✅ اكتملت الدورة. الوظائف الموجودة: {jobs_found}")
-    print(f"⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("=" * 50)
+    # تشغيل البوت
+    try:
+        bot = SmartVideoJobBot()
+        jobs_sent = bot.run()
+        
+        print(f"✅ النتيجة النهائية: تم إرسال {jobs_sent} وظيفة جديدة")
+        
+    except KeyboardInterrupt:
+        print("\n⚠️ تم إيقاف البوت يدوياً (Ctrl+C)")
+    except Exception as e:
+        print(f"\n❌ خطأ غير متوقع: {e}")
+        import traceback
+        traceback.print_exc()
+
 
 if __name__ == "__main__":
     main()
