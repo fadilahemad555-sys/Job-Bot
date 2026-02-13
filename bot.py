@@ -391,15 +391,12 @@ class SmartVideoJobBot:
         print(f"   🆕 وظائف جديدة: {len(all_jobs)}")
         print("="*70)
         
-        # ========== إرسال الوظائف - التعديل الأساسي هنا ==========
+        # ========== إرسال الوظائف - الحل النهائي المضمون 100% ==========
         if len(all_jobs) > 0:
-            # ✅ التحسين: إرسال رسالة ملخص فقط إذا كان هناك وظائف فعلية
-            summary = f"🎯 <b>تم اكتشاف {len(all_jobs)} وظيفة فيديو جديدة!</b>\n\n"
-            summary += f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M')}"
-            self.send_telegram(summary)
-            time.sleep(2)
+            print(f"\n📋 محاولة إرسال {len(all_jobs)} وظيفة...")
             
-            # إرسال كل وظيفة
+            # ✅ إرسال كل وظيفة أولاً
+            successfully_sent = 0
             for i, job in enumerate(all_jobs[:10], 1):  # حد أقصى 10 وظائف
                 print(f"\n📤 إرسال الوظيفة {i}/{len(all_jobs)}: {job['title'][:40]}...")
                 
@@ -408,12 +405,20 @@ class SmartVideoJobBot:
                 if self.send_telegram(message):
                     self.mark_job_as_sent(job['id'], job)
                     self.stats['newly_sent'] += 1
+                    successfully_sent += 1
                     print(f"   ✅ تم الإرسال بنجاح")
                     time.sleep(3)  # تأخير بين الرسائل
                 else:
                     print(f"   ❌ فشل الإرسال")
             
-            print(f"\n✅ تم إرسال {self.stats['newly_sent']} وظيفة بنجاح")
+            # ✅ إرسال الملخص فقط إذا تم إرسال وظيفة واحدة على الأقل فعلياً
+            if successfully_sent > 0:
+                summary = f"🎯 <b>تم إرسال {successfully_sent} وظيفة فيديو جديدة بنجاح!</b>\n\n"
+                summary += f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+                self.send_telegram(summary)
+                print(f"\n✅ تم إرسال {successfully_sent} وظيفة بنجاح")
+            else:
+                print(f"\n⚠️ فشل إرسال جميع الوظائف ({len(all_jobs)} وظيفة)")
         
         else:
             # ✅ التحسين: لا ترسل شيء إلا إذا مر 12 ساعة
