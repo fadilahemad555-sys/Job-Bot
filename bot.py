@@ -86,8 +86,13 @@ class SmartVideoJobBot:
                 cutoff = (datetime.now() - timedelta(days=10)).isoformat()
                 cleaned_data = {
                     k: v for k, v in data.items() 
-                    if v.get('sent_at', '') > cutoff
+                    if not k.startswith('_') and v.get('sent_at', '') > cutoff
                 }
+                
+                # الاحتفاظ بالإعدادات الخاصة (مثل _last_no_jobs_alert)
+                for key in data:
+                    if key.startswith('_'):
+                        cleaned_data[key] = data[key]
                 
                 # حفظ البيانات المنظفة
                 if len(cleaned_data) < len(data):
@@ -216,42 +221,40 @@ class SmartVideoJobBot:
         return None
     
     def search_remoteok(self):
-        """البحث في RemoteOK API"""
+        """البحث في RemoteOK"""
+        platform_name = "RemoteOK"
         jobs = []
-        platform_name = 'RemoteOK'
-        
-        print(f"\n🔍 البحث في {platform_name}...")
         
         try:
-            url = self.api_sources['remoteok']['url']
-            response = self.safe_api_call(url, platform_name)
+            print(f"\n🔍 البحث في {platform_name}...")
+            
+            source = self.api_sources['remoteok']
+            response = self.safe_api_call(source['url'], platform_name)
             
             if not response:
-                print(f"   ❌ فشل الاتصال بـ {platform_name}")
-                return jobs
+                print(f"❌ فشل الاتصال بـ {platform_name}")
+                return []
             
             data = response.json()
-            print(f"   📊 تم جلب {len(data)} عنصر من API")
+            print(f"   📊 إجمالي الوظائف: {len(data)}")
             
             # تخطي العنصر الأول (metadata)
-            job_listings = data[1:] if len(data) > 1 else []
-            
-            for idx, job in enumerate(job_listings[:100], 1):  # فحص أول 100 وظيفة
+            for job in data[1:]:
                 try:
-                    title = job.get('position', '')
-                    company = job.get('company', '')
-                    url_link = job.get('url', '')
-                    description = job.get('description', '')
-                    
-                    if not title or not company:
-                        continue
-                    
                     self.stats['total_checked'] += 1
                     
-                    # عرض معلومات الفحص
-                    print(f"\n   [{idx}] فحص: {title[:50]}...")
+                    # ========== استخراج البيانات ==========
+                    title = job.get('position', '')
+                    company = job.get('company', 'غير محدد')
+                    description = job.get('description', '')
+                    url_link = job.get('url', '')
                     
-                    # ========== الفلترة الصارمة ==========
+                    if not title or not url_link:
+                        continue
+                    
+                    print(f"\n🔎 فحص: {title[:60]}...")
+                    
+                    # ========== فحص الصلاحية ==========
                     if not self.is_valid_video_job(title, description):
                         continue
                     
@@ -356,10 +359,10 @@ class SmartVideoJobBot:
     def run(self):
         """تشغيل البوت"""
         print("\n" + "="*70)
-        print("🤖 Video Job Hunter Bot - النسخة النهائية v3.0")
+        print("🤖 Video Job Hunter Bot - النسخة المحسنة v3.1")
         print("="*70)
         print(f"⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"💾 قاعدة البيانات: {len(self.job_db)} وظيفة محفوظة")
+        print(f"💾 قاعدة البيانات: {len([k for k in self.job_db.keys() if not k.startswith('_')])} وظيفة محفوظة")
         print("="*70)
         
         # ========== البحث في المنصات ==========
@@ -388,9 +391,9 @@ class SmartVideoJobBot:
         print(f"   🆕 وظائف جديدة: {len(all_jobs)}")
         print("="*70)
         
-        # ========== إرسال الوظائف ==========
+        # ========== إرسال الوظائف - التعديل الأساسي هنا ==========
         if len(all_jobs) > 0:
-            # رسالة افتتاحية
+            # ✅ التحسين: إرسال رسالة ملخص فقط إذا كان هناك وظائف فعلية
             summary = f"🎯 <b>تم اكتشاف {len(all_jobs)} وظيفة فيديو جديدة!</b>\n\n"
             summary += f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M')}"
             self.send_telegram(summary)
@@ -413,24 +416,44 @@ class SmartVideoJobBot:
             print(f"\n✅ تم إرسال {self.stats['newly_sent']} وظيفة بنجاح")
         
         else:
+            # ✅ التحسين: لا ترسل شيء إلا إذا مر 12 ساعة
             print("\nℹ️ لا توجد وظائف جديدة في هذه الدورة")
             
-            # إرسال تنبيه فقط مرة كل 12 ساعة
+            # إرسال تنبيه فقط مرة كل ساعتين
             last_alert = self.job_db.get('_last_no_jobs_alert', {})
             last_alert_time = last_alert.get('time', '')
             
-            if not last_alert_time or \
-               (datetime.now() - datetime.fromisoformat(last_alert_time)).total_seconds() > 43200:
-                self.send_telegram("ℹ️ <b>لا توجد وظائف فيديو جديدة حالياً</b>\n\n<i>سيتم البحث مجدداً في الدورة القادمة</i>")
+            should_send_alert = False
+            if not last_alert_time:
+                should_send_alert = True
+            else:
+                try:
+                    time_diff = (datetime.now() - datetime.fromisoformat(last_alert_time)).total_seconds()
+                    if time_diff > 7200:  # ساعتين (2 * 60 * 60 = 7200 ثانية)
+                        should_send_alert = True
+                except:
+                    should_send_alert = True
+            
+            if should_send_alert:
+                alert_msg = "ℹ️ <b>لا توجد وظائف فيديو جديدة حالياً</b>\n\n"
+                alert_msg += f"⏰ آخر فحص: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
+                alert_msg += f"📊 إجمالي الوظائف المفحوصة: {self.stats['total_checked']}\n"
+                alert_msg += f"💾 قاعدة البيانات: {len([k for k in self.job_db.keys() if not k.startswith('_')])} وظيفة\n\n"
+                alert_msg += "<i>سيتم البحث مجدداً في الدورة القادمة</i>"
+                
+                self.send_telegram(alert_msg)
                 self.job_db['_last_no_jobs_alert'] = {'time': datetime.now().isoformat()}
                 self.save_database()
+                print("📨 تم إرسال تنبيه عدم وجود وظائف جديدة")
+            else:
+                print("⏭️ تخطي إرسال التنبيه (لم يمر ساعتين بعد)")
         
         # ========== النتيجة النهائية ==========
         print("\n" + "="*70)
         print(f"✅ اكتملت الدورة بنجاح")
         print(f"📊 النتائج:")
         print(f"   • وظائف جديدة تم إرسالها: {self.stats['newly_sent']}")
-        print(f"   • إجمالي قاعدة البيانات: {len(self.job_db)} وظيفة")
+        print(f"   • إجمالي قاعدة البيانات: {len([k for k in self.job_db.keys() if not k.startswith('_')])} وظيفة")
         print("="*70 + "\n")
         
         return self.stats['newly_sent']
