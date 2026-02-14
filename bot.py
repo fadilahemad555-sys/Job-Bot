@@ -421,10 +421,25 @@ class SmartVideoJobBot:
                 print(f"\n⚠️ فشل إرسال جميع الوظائف ({len(all_jobs)} وظيفة)")
         
         else:
-            # ✅ التحسين: لا ترسل شيء إلا إذا مر 12 ساعة
+            # ✅ لا ترسل تنبيه إلا بعد مرور نصف ساعة
             print("\nℹ️ لا توجد وظائف جديدة في هذه الدورة")
             
-            # إرسال تنبيه فقط مرة كل ساعتين
+            # 🔍 تشخيص مفصل
+            print(f"\n📊 تشخيص تفصيلي:")
+            print(f"   🔍 الوظائف المفحوصة: {self.stats['total_checked']}")
+            print(f"   ✅ نجحت في الفلترة: {self.stats['passed_filter']}")
+            print(f"   ⏭️ مكررة (تم إرسالها مسبقاً): {self.stats['already_sent']}")
+            print(f"   💾 إجمالي قاعدة البيانات: {len([k for k in self.job_db.keys() if not k.startswith('_')])} وظيفة")
+            
+            # تحليل السبب
+            if self.stats['total_checked'] == 0:
+                print(f"   ⚠️ السبب: لا يوجد اتصال بالمنصات أو خطأ في API")
+            elif self.stats['passed_filter'] == 0:
+                print(f"   ⚠️ السبب: جميع الوظائف تم استبعادها بواسطة الفلتر")
+            elif self.stats['already_sent'] > 0:
+                print(f"   ⚠️ السبب: جميع الوظائف ({self.stats['already_sent']}) مكررة (تم إرسالها من قبل)")
+            
+            # إرسال تنبيه فقط مرة كل نصف ساعة
             last_alert = self.job_db.get('_last_no_jobs_alert', {})
             last_alert_time = last_alert.get('time', '')
             
@@ -434,24 +449,36 @@ class SmartVideoJobBot:
             else:
                 try:
                     time_diff = (datetime.now() - datetime.fromisoformat(last_alert_time)).total_seconds()
-                    if time_diff > 7200:  # ساعتين (2 * 60 * 60 = 7200 ثانية)
+                    if time_diff > 1800:  # نصف ساعة (30 * 60 = 1800 ثانية)
                         should_send_alert = True
                 except:
                     should_send_alert = True
             
             if should_send_alert:
+                # تحديد السبب الحقيقي
+                reason = ""
+                if self.stats['total_checked'] == 0:
+                    reason = "لم يتم فحص أي وظائف (مشكلة اتصال؟)"
+                elif self.stats['passed_filter'] == 0:
+                    reason = f"تم فحص {self.stats['total_checked']} وظيفة لكن لا شيء يطابق الفلتر"
+                elif self.stats['already_sent'] > 0:
+                    reason = f"تم العثور على {self.stats['already_sent']} وظيفة لكنها مكررة"
+                else:
+                    reason = "سبب غير معروف"
+                
                 alert_msg = "ℹ️ <b>لا توجد وظائف فيديو جديدة حالياً</b>\n\n"
                 alert_msg += f"⏰ آخر فحص: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
-                alert_msg += f"📊 إجمالي الوظائف المفحوصة: {self.stats['total_checked']}\n"
-                alert_msg += f"💾 قاعدة البيانات: {len([k for k in self.job_db.keys() if not k.startswith('_')])} وظيفة\n\n"
-                alert_msg += "<i>سيتم البحث مجدداً في الدورة القادمة</i>"
+                alert_msg += f"📊 الوظائف المفحوصة: {self.stats['total_checked']}\n"
+                alert_msg += f"💾 قاعدة البيانات: {len([k for k in self.job_db.keys() if not k.startswith('_')])} وظيفة\n"
+                alert_msg += f"🔍 السبب: {reason}\n\n"
+                alert_msg += "<i>⏰ التنبيه التالي بعد 30 دقيقة</i>"
                 
                 self.send_telegram(alert_msg)
                 self.job_db['_last_no_jobs_alert'] = {'time': datetime.now().isoformat()}
                 self.save_database()
-                print("📨 تم إرسال تنبيه عدم وجود وظائف جديدة")
+                print("📨 تم إرسال تنبيه تشخيصي")
             else:
-                print("⏭️ تخطي إرسال التنبيه (لم يمر ساعتين بعد)")
+                print("⏭️ تخطي إرسال التنبيه (لم يمر نصف ساعة بعد)")
         
         # ========== النتيجة النهائية ==========
         print("\n" + "="*70)
