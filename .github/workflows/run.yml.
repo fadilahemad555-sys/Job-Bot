@@ -1,35 +1,21 @@
-name: تشغيل البوت الدوري
-
+name: بوت البحث عن وظائف
 on:
   schedule:
-    - cron: '*/30 * * * *'
-  workflow_dispatch:
+    - cron: '*/30 * * * *'   # يعمل كل 30 دقيقة
+  workflow_dispatch:           # يمكنك تشغيله يدوياً
 
 jobs:
-  run-bot:
+  run:
     runs-on: ubuntu-latest
     steps:
-      - name: استنساخ المستودع
-        uses: actions/checkout@v4
-
-      - name: إعداد Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-
-      # استرجاع آخر قيمة offset من cache
-      - name: استرجاع Cache
-        uses: actions/cache@v3
-        id: cache-offset
-        with:
-          path: offset.json
-          key: offset-cache
-
       - name: تثبيت المكتبات
         run: pip install python-telegram-bot
-
       - name: تشغيل البوت
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
-        run: python bot.py   # <-- تأكد أن bot.py في الجذر وليس في مجلد فرعي
+        run: python bot.py   # هنا الملف bot.py في الجذر
