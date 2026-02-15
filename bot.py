@@ -6,104 +6,89 @@ import hashlib
 from datetime import datetime, timedelta
 from pathlib import Path
 
-class SmartVideoJobBot:
+class VideoClientHunterBot:
+    """
+    بوت ذكي للبحث عن فرص عمل في تحرير الفيديو
+    يجلب: وظائف دائمة + مشاريع Freelance + طلبات مباشرة
+    """
+    
     def __init__(self):
         # ========== الإعدادات الأساسية ==========
         self.telegram_token = os.environ.get('TELEGRAM_TOKEN')
         self.chat_id = os.environ.get('CHAT_ID', '8497315428')
         self.base_url = f"https://api.telegram.org/bot{self.telegram_token}"
         
-        # ========== ملف التتبع (مهم جداً!) ==========
-        self.db_file = Path('job_database.json')
+        # ========== قاعدة البيانات ==========
+        self.db_file = Path('video_clients_db.json')
         self.job_db = self.load_database()
         
-        # ========== المنصات الموثوقة فقط ==========
-        self.api_sources = {
-            'remoteok': {
-                'url': 'https://remoteok.io/api',
-                'active': True
-            }
-        }
-        
-        # ========== كلمات مفتاحية دقيقة جداً ==========
-        self.required_keywords = [
+        # ========== الكلمات المفتاحية الذكية ==========
+        self.video_keywords = [
             'video editor',
             'video editing',
-            'motion graphics',
-            'motion designer',
             'video producer',
             'video production',
+            'motion graphics',
+            'motion designer',
+            'video content creator',
+            'youtube editor',
+            'video specialist',
             'post production',
-            'post-production'
-        ]
-        
-        # كلمات داعمة (لزيادة الدقة)
-        self.support_keywords = [
-            'premiere',
+            'montage',
+            'premiere pro',
             'after effects',
-            'final cut',
-            'davinci',
-            'resolve',
-            'avid',
-            'video content',
-            'video specialist'
+            'final cut pro',
+            'davinci resolve'
         ]
         
-        # ========== كلمات استبعاد قوية ==========
-        self.exclude_keywords = [
-            # وظائف برمجة
-            'software engineer', 'developer', 'programmer', 'backend', 'frontend',
-            'full stack', 'devops', 'ios', 'android', 'react', 'python', 'java',
-            'data scientist', 'machine learning', 'ai engineer', 'ml engineer',
-            
-            # وظائف إدارة
-            'product manager', 'project manager', 'account manager', 'sales manager',
-            'marketing manager', 'business development', 'customer success',
-            
-            # وظائف أخرى
-            'recruiter', 'hr manager', 'accountant', 'financial analyst',
-            'content writer', 'copywriter', 'seo specialist'
+        # ========== كلمات الاستبعاد (فقط الصارمة) ==========
+        self.exclude_titles = [
+            'software engineer',
+            'data scientist',
+            'backend developer',
+            'frontend developer',
+            'mobile developer',
+            'recruiter',
+            'accountant'
         ]
         
-        # ========== إحصائيات ==========
+        # ========== الإحصائيات ==========
         self.stats = {
             'total_checked': 0,
             'passed_filter': 0,
-            'already_sent': 0,
+            'duplicates': 0,
             'newly_sent': 0
         }
     
     # ==================== إدارة قاعدة البيانات ====================
     
     def load_database(self):
-        """تحميل قاعدة بيانات الوظائف المرسلة"""
+        """تحميل قاعدة البيانات"""
         try:
             if self.db_file.exists():
                 with open(self.db_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                 
-                # تنظيف تلقائي: حذف الوظائف الأقدم من 10 أيام
-                cutoff = (datetime.now() - timedelta(days=10)).isoformat()
-                cleaned_data = {
-                    k: v for k, v in data.items() 
+                # تنظيف: حذف الوظائف الأقدم من 15 يوم
+                cutoff = (datetime.now() - timedelta(days=15)).isoformat()
+                cleaned = {
+                    k: v for k, v in data.items()
                     if not k.startswith('_') and v.get('sent_at', '') > cutoff
                 }
                 
-                # الاحتفاظ بالإعدادات الخاصة (مثل _last_no_jobs_alert)
+                # الاحتفاظ بالإعدادات
                 for key in data:
                     if key.startswith('_'):
-                        cleaned_data[key] = data[key]
+                        cleaned[key] = data[key]
                 
-                # حفظ البيانات المنظفة
-                if len(cleaned_data) < len(data):
-                    self.save_database(cleaned_data)
-                    print(f"🧹 تنظيف قاعدة البيانات: {len(data)} → {len(cleaned_data)} وظيفة")
+                if len(cleaned) < len(data):
+                    self.save_database(cleaned)
+                    print(f"🧹 تنظيف: {len(data)} → {len(cleaned)} فرصة")
                 
-                return cleaned_data
-            
+                return cleaned
             return {}
         except Exception as e:
-            print(f"⚠️ خطأ في تحميل قاعدة البيانات: {e}")
+            print(f"⚠️ خطأ تحميل DB: {e}")
             return {}
     
     def save_database(self, data=None):
@@ -111,219 +96,262 @@ class SmartVideoJobBot:
         try:
             if data is None:
                 data = self.job_db
-            
             with open(self.db_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"⚠️ خطأ في حفظ قاعدة البيانات: {e}")
+            print(f"⚠️ خطأ حفظ DB: {e}")
     
-    def generate_unique_id(self, title, company, url):
-        """إنشاء معرّف فريد للوظيفة"""
-        # استخدام URL كمعرف أساسي (الأكثر موثوقية)
+    def generate_id(self, title, company, url):
+        """إنشاء معرف فريد"""
         if url:
             return hashlib.md5(url.encode()).hexdigest()
-        
-        # بديل: استخدام العنوان + الشركة
-        unique_str = f"{title.lower().strip()}{company.lower().strip()}"
-        return hashlib.md5(unique_str.encode()).hexdigest()
+        unique = f"{title.lower().strip()}{company.lower().strip()}"
+        return hashlib.md5(unique.encode()).hexdigest()
     
-    def is_job_already_sent(self, job_id):
-        """فحص إذا تم إرسال الوظيفة مسبقاً"""
+    def is_duplicate(self, job_id):
+        """فحص التكرار"""
         return job_id in self.job_db
     
-    def mark_job_as_sent(self, job_id, job_info):
-        """تسجيل الوظيفة كمرسلة"""
+    def mark_as_sent(self, job_id, job_info):
+        """تسجيل كمرسل"""
         self.job_db[job_id] = {
             'title': job_info.get('title', ''),
             'company': job_info.get('company', ''),
             'url': job_info.get('url', ''),
             'sent_at': datetime.now().isoformat(),
-            'platform': job_info.get('platform', '')
+            'type': job_info.get('type', 'job')
         }
         self.save_database()
     
-    # ==================== الفلترة الذكية ====================
+    # ==================== الفلتر الذكي ====================
     
-    def is_valid_video_job(self, title, description=''):
-        """فحص صارم: هل هذه وظيفة فيديو حقيقية؟"""
+    def is_video_opportunity(self, title, description=''):
+        """فحص ذكي: هل هذه فرصة فيديو؟"""
         title_lower = title.lower().strip()
-        desc_lower = description.lower()[:500]  # فحص أول 500 حرف فقط
-        combined = f"{title_lower} {desc_lower}"
+        desc_lower = description.lower()[:800]
         
-        # ========== خطوة 1: استبعاد الوظائف غير المناسبة ==========
-        for exclude_word in self.exclude_keywords:
-            if exclude_word in combined:
-                print(f"   ❌ استبعاد: يحتوي على '{exclude_word}'")
-                return False
-        
-        # ========== خطوة 2: يجب وجود كلمة مفتاحية أساسية ==========
-        has_required = False
-        for keyword in self.required_keywords:
-            if keyword in title_lower:
-                has_required = True
-                print(f"   ✅ كلمة مطلوبة: '{keyword}'")
+        # ========== خطوة 1: هل تحتوي على كلمة فيديو؟ ==========
+        has_video_keyword = False
+        for keyword in self.video_keywords:
+            if keyword in title_lower or keyword in desc_lower:
+                has_video_keyword = True
+                print(f"   ✅ وجدت: '{keyword}'")
                 break
         
-        if not has_required:
-            # فحص في الوصف أيضاً
-            for keyword in self.required_keywords:
-                if keyword in desc_lower:
-                    has_required = True
-                    print(f"   ✅ كلمة مطلوبة في الوصف: '{keyword}'")
-                    break
-        
-        if not has_required:
-            print(f"   ❌ رفض: لا تحتوي على كلمات مفتاحية مطلوبة")
+        if not has_video_keyword:
+            print(f"   ❌ لا توجد كلمات فيديو")
             return False
         
-        # ========== خطوة 3 (اختيارية): التحقق من الكلمات الداعمة ==========
-        # هذا يزيد من الثقة ولكن ليس إلزامياً
-        has_support = any(word in combined for word in self.support_keywords)
-        if has_support:
-            print(f"   ⭐ وظيفة قوية: تحتوي على كلمات داعمة")
+        # ========== خطوة 2: استبعاد ذكي ==========
+        # فقط أول 4 كلمات من العنوان
+        first_words = ' '.join(title_lower.split()[:4])
         
+        for exclude in self.exclude_titles:
+            if exclude in first_words:
+                print(f"   ❌ استبعاد: '{exclude}' في العنوان")
+                return False
+        
+        print(f"   ✅ فرصة صالحة!")
         return True
     
     # ==================== البحث في المنصات ====================
     
-    def safe_api_call(self, url, platform_name, max_retries=2):
-        """طلب API آمن مع إعادة المحاولة"""
-        for attempt in range(max_retries):
-            try:
+    def safe_request(self, url, headers=None, timeout=30):
+        """طلب آمن"""
+        try:
+            if headers is None:
                 headers = {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept': 'application/json',
-                    'Accept-Language': 'en-US,en;q=0.9'
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
                 }
-                
-                response = requests.get(url, headers=headers, timeout=30)
-                
-                # معالجة حظر API
-                if response.status_code == 429:
-                    wait_time = 60 * (attempt + 1)
-                    print(f"   ⏳ Rate limit من {platform_name}، انتظار {wait_time}ث...")
-                    time.sleep(wait_time)
-                    continue
-                
-                if response.status_code == 200:
-                    return response
-                else:
-                    print(f"   ⚠️ استجابة غير متوقعة: {response.status_code}")
-                    
-            except requests.exceptions.Timeout:
-                print(f"   ⏱️ انتهى الوقت في المحاولة {attempt + 1}")
-            except Exception as e:
-                print(f"   ❌ خطأ في المحاولة {attempt + 1}: {e}")
-            
-            if attempt < max_retries - 1:
-                time.sleep(5)
-        
+            response = requests.get(url, headers=headers, timeout=timeout)
+            if response.status_code == 200:
+                return response
+            print(f"   ⚠️ Status: {response.status_code}")
+        except Exception as e:
+            print(f"   ❌ خطأ: {e}")
         return None
     
     def search_remoteok(self):
         """البحث في RemoteOK"""
-        platform_name = "RemoteOK"
-        jobs = []
+        print(f"\n🔍 البحث في RemoteOK...")
+        opportunities = []
         
         try:
-            print(f"\n🔍 البحث في {platform_name}...")
-            
-            source = self.api_sources['remoteok']
-            response = self.safe_api_call(source['url'], platform_name)
-            
+            response = self.safe_request('https://remoteok.io/api')
             if not response:
-                print(f"❌ فشل الاتصال بـ {platform_name}")
                 return []
             
             data = response.json()
-            print(f"   📊 إجمالي الوظائف: {len(data)}")
+            print(f"   📊 الوظائف: {len(data)}")
             
-            # تخطي العنصر الأول (metadata)
-            for job in data[1:]:
+            for job in data[1:]:  # تخطي metadata
                 try:
                     self.stats['total_checked'] += 1
                     
-                    # ========== استخراج البيانات ==========
                     title = job.get('position', '')
                     company = job.get('company', 'غير محدد')
-                    description = job.get('description', '')
-                    url_link = job.get('url', '')
+                    desc = job.get('description', '')
+                    url = job.get('url', '')
                     
-                    if not title or not url_link:
+                    if not title or not url:
                         continue
                     
-                    print(f"\n🔎 فحص: {title[:60]}...")
+                    print(f"\n🔎 {title[:50]}...")
                     
-                    # ========== فحص الصلاحية ==========
-                    if not self.is_valid_video_job(title, description):
+                    if not self.is_video_opportunity(title, desc):
                         continue
                     
                     self.stats['passed_filter'] += 1
                     
-                    # ========== فحص التكرار ==========
-                    job_id = self.generate_unique_id(title, company, url_link)
-                    
-                    if self.is_job_already_sent(job_id):
-                        print(f"   ⏭️ تم إرسالها مسبقاً")
-                        self.stats['already_sent'] += 1
+                    # فحص التكرار
+                    job_id = self.generate_id(title, company, url)
+                    if self.is_duplicate(job_id):
+                        print(f"   ⏭️ مكررة")
+                        self.stats['duplicates'] += 1
                         continue
                     
-                    # ========== وظيفة جديدة وصالحة! ==========
-                    job_info = {
+                    # فرصة جديدة!
+                    opp = {
                         'id': job_id,
-                        'platform': platform_name,
+                        'type': 'وظيفة دائمة',
+                        'platform': 'RemoteOK',
                         'title': title,
                         'company': company,
-                        'url': url_link,
-                        'description': description[:400] + '...' if len(description) > 400 else description,
-                        'salary': job.get('salary_max', job.get('salary', 'غير محدد')),
-                        'tags': ', '.join(job.get('tags', [])[:5]),
+                        'url': url,
+                        'description': desc[:500],
+                        'salary': job.get('salary_max') or job.get('salary', 'غير محدد'),
                         'location': job.get('location', 'Remote'),
-                        'posted_date': job.get('date', 'غير محدد')
+                        'tags': ', '.join(job.get('tags', [])[:5])
                     }
                     
-                    jobs.append(job_info)
-                    print(f"   ✅ وظيفة صالحة وجديدة!")
+                    opportunities.append(opp)
+                    print(f"   ✅ فرصة جديدة!")
                     
                 except Exception as e:
-                    print(f"   ⚠️ خطأ في معالجة وظيفة: {e}")
-                    continue
+                    print(f"   ⚠️ خطأ معالجة: {e}")
             
-            print(f"\n✅ {platform_name}: وجدنا {len(jobs)} وظيفة جديدة صالحة")
+            print(f"\n✅ RemoteOK: {len(opportunities)} فرصة جديدة")
             
         except Exception as e:
-            print(f"❌ خطأ عام في {platform_name}: {e}")
+            print(f"❌ خطأ RemoteOK: {e}")
         
-        return jobs
+        return opportunities
+    
+    def search_wwr(self):
+        """البحث في We Work Remotely"""
+        print(f"\n🔍 البحث في We Work Remotely...")
+        opportunities = []
+        
+        try:
+            # WWR لديهم RSS feed
+            response = self.safe_request('https://weworkremotely.com/categories/remote-video-editing-jobs.rss')
+            if not response:
+                return []
+            
+            # معالجة RSS بسيطة
+            content = response.text
+            
+            # استخراج الوظائف من RSS (بسيط)
+            import re
+            items = re.findall(r'<item>(.*?)</item>', content, re.DOTALL)
+            
+            print(f"   📊 الوظائف: {len(items)}")
+            
+            for item in items[:20]:  # أول 20
+                try:
+                    self.stats['total_checked'] += 1
+                    
+                    title_match = re.search(r'<title><!\[CDATA\[(.*?)\]\]></title>', item)
+                    link_match = re.search(r'<link>(.*?)</link>', item)
+                    desc_match = re.search(r'<description><!\[CDATA\[(.*?)\]\]></description>', item)
+                    
+                    if not title_match or not link_match:
+                        continue
+                    
+                    title = title_match.group(1).strip()
+                    url = link_match.group(1).strip()
+                    desc = desc_match.group(1).strip() if desc_match else ''
+                    
+                    # استخراج الشركة من العنوان
+                    # عادة: "Job Title: Company Name"
+                    company = 'غير محدد'
+                    if ':' in title:
+                        parts = title.split(':')
+                        if len(parts) >= 2:
+                            company = parts[1].strip()
+                            title = parts[0].strip()
+                    
+                    print(f"\n🔎 {title[:50]}...")
+                    
+                    if not self.is_video_opportunity(title, desc):
+                        continue
+                    
+                    self.stats['passed_filter'] += 1
+                    
+                    job_id = self.generate_id(title, company, url)
+                    if self.is_duplicate(job_id):
+                        print(f"   ⏭️ مكررة")
+                        self.stats['duplicates'] += 1
+                        continue
+                    
+                    opp = {
+                        'id': job_id,
+                        'type': 'وظيفة دائمة',
+                        'platform': 'We Work Remotely',
+                        'title': title,
+                        'company': company,
+                        'url': url,
+                        'description': desc[:500],
+                        'salary': 'غير محدد',
+                        'location': 'Remote',
+                        'tags': ''
+                    }
+                    
+                    opportunities.append(opp)
+                    print(f"   ✅ فرصة جديدة!")
+                    
+                except Exception as e:
+                    print(f"   ⚠️ خطأ: {e}")
+            
+            print(f"\n✅ WWR: {len(opportunities)} فرصة جديدة")
+            
+        except Exception as e:
+            print(f"❌ خطأ WWR: {e}")
+        
+        return opportunities
     
     # ==================== إرسال تليجرام ====================
     
-    def format_message(self, job):
+    def format_message(self, opp):
         """تنسيق رسالة احترافية"""
+        emoji = "💼" if opp['type'] == 'وظيفة دائمة' else "🎬"
+        
         message = f"""
-🎬 <b>وظيفة فيديو جديدة!</b>
+{emoji} <b>{opp['type']} جديدة!</b>
 
-📌 <b>المنصة:</b> {job['platform']}
-🏷️ <b>المسمى الوظيفي:</b> {job['title']}
-🏢 <b>الشركة:</b> {job['company']}
-💰 <b>الراتب:</b> {job.get('salary', 'غير محدد')}
-📍 <b>الموقع:</b> {job.get('location', 'Remote')}
-🏷️ <b>المهارات:</b> {job.get('tags', 'غير محدد')}
+🏷️ <b>المسمى:</b> {opp['title']}
+🏢 <b>الشركة:</b> {opp['company']}
+🌐 <b>المنصة:</b> {opp['platform']}
+💰 <b>الراتب:</b> {opp.get('salary', 'غير محدد')}
+📍 <b>الموقع:</b> {opp.get('location', 'Remote')}
+"""
+        
+        if opp.get('tags'):
+            message += f"🏷️ <b>المهارات:</b> {opp['tags']}\n"
+        
+        message += f"""
+📝 <b>الوصف:</b>
+{opp['description']}
 
-📝 <b>نبذة:</b>
-{job['description']}
+🔗 <b>التقديم:</b>
+{opp['url']}
 
-🔗 <b>رابط التقديم:</b>
-{job['url']}
-
-⏰ <b>تاريخ الاكتشاف:</b> {datetime.now().strftime('%Y-%m-%d %H:%M')}
-
-<i>🤖 تم اكتشافها تلقائياً بواسطة Video Job Bot</i>
+⏰ {datetime.now().strftime('%Y-%m-%d %H:%M')}
 """
         return message.strip()
     
-    def send_telegram(self, message, retry=True):
-        """إرسال رسالة تليجرام مع معالجة الأخطاء"""
+    def send_telegram(self, message):
+        """إرسال رسالة"""
         try:
             url = f"{self.base_url}/sendMessage"
             payload = {
@@ -335,23 +363,16 @@ class SmartVideoJobBot:
             
             response = requests.post(url, json=payload, timeout=15)
             
-            # معالجة Rate Limit
             if response.status_code == 429:
-                if retry:
-                    retry_after = response.json().get('parameters', {}).get('retry_after', 30)
-                    print(f"   ⏳ Telegram rate limit: انتظار {retry_after}ث")
-                    time.sleep(retry_after + 2)
-                    return self.send_telegram(message, retry=False)
-                return False
+                wait = response.json().get('parameters', {}).get('retry_after', 30)
+                print(f"   ⏳ انتظار {wait}ث")
+                time.sleep(wait + 2)
+                return self.send_telegram(message)
             
-            if response.status_code != 200:
-                print(f"   ⚠️ Telegram error: {response.text}")
-                return False
-            
-            return True
+            return response.status_code == 200
             
         except Exception as e:
-            print(f"   ❌ خطأ إرسال Telegram: {e}")
+            print(f"   ❌ خطأ Telegram: {e}")
             return False
     
     # ==================== التشغيل الرئيسي ====================
@@ -359,164 +380,131 @@ class SmartVideoJobBot:
     def run(self):
         """تشغيل البوت"""
         print("\n" + "="*70)
-        print("🤖 Video Job Hunter Bot - النسخة المحسنة v3.1")
+        print("🎬 Video Client Hunter Bot - صياد الفرص v1.0")
         print("="*70)
-        print(f"⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"💾 قاعدة البيانات: {len([k for k in self.job_db.keys() if not k.startswith('_')])} وظيفة محفوظة")
+        print(f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"💾 قاعدة البيانات: {len([k for k in self.job_db if not k.startswith('_')])} فرصة")
         print("="*70)
         
-        # ========== البحث في المنصات ==========
-        all_jobs = []
+        # البحث في جميع المنصات
+        all_opportunities = []
         
-        # يمكنك إضافة منصات أخرى هنا
-        search_functions = [
+        platforms = [
             self.search_remoteok,
-            # self.search_other_platform,  # أضف منصات أخرى
+            self.search_wwr,
         ]
         
-        for search_func in search_functions:
+        for platform_func in platforms:
             try:
-                jobs = search_func()
-                all_jobs.extend(jobs)
-                time.sleep(5)  # تأخير بين المنصات
+                opps = platform_func()
+                all_opportunities.extend(opps)
+                time.sleep(5)  # راحة بين المنصات
             except Exception as e:
-                print(f"❌ خطأ في {search_func.__name__}: {e}")
+                print(f"❌ خطأ في {platform_func.__name__}: {e}")
         
-        # ========== عرض الإحصائيات ==========
+        # الإحصائيات
         print("\n" + "="*70)
-        print("📊 إحصائيات البحث:")
-        print(f"   🔍 إجمالي الوظائف المفحوصة: {self.stats['total_checked']}")
-        print(f"   ✅ نجحت في الفلترة: {self.stats['passed_filter']}")
-        print(f"   ⏭️ مرسلة مسبقاً: {self.stats['already_sent']}")
-        print(f"   🆕 وظائف جديدة: {len(all_jobs)}")
+        print("📊 الإحصائيات:")
+        print(f"   🔍 المفحوصة: {self.stats['total_checked']}")
+        print(f"   ✅ نجحت في الفلتر: {self.stats['passed_filter']}")
+        print(f"   ⏭️ مكررة: {self.stats['duplicates']}")
+        print(f"   🆕 فرص جديدة: {len(all_opportunities)}")
         print("="*70)
         
-        # ========== إرسال الوظائف - الحل النهائي المضمون 100% ==========
-        if len(all_jobs) > 0:
-            print(f"\n📋 محاولة إرسال {len(all_jobs)} وظيفة...")
-            
-            # ✅ إرسال كل وظيفة أولاً
+        # الإرسال
+        if len(all_opportunities) > 0:
             successfully_sent = 0
-            for i, job in enumerate(all_jobs[:10], 1):  # حد أقصى 10 وظائف
-                print(f"\n📤 إرسال الوظيفة {i}/{len(all_jobs)}: {job['title'][:40]}...")
+            
+            for i, opp in enumerate(all_opportunities[:15], 1):
+                print(f"\n📤 إرسال {i}/{len(all_opportunities)}: {opp['title'][:40]}...")
                 
-                message = self.format_message(job)
+                message = self.format_message(opp)
                 
                 if self.send_telegram(message):
-                    self.mark_job_as_sent(job['id'], job)
-                    self.stats['newly_sent'] += 1
+                    self.mark_as_sent(opp['id'], opp)
                     successfully_sent += 1
-                    print(f"   ✅ تم الإرسال بنجاح")
-                    time.sleep(3)  # تأخير بين الرسائل
+                    print(f"   ✅ تم الإرسال")
+                    time.sleep(3)
                 else:
-                    print(f"   ❌ فشل الإرسال")
+                    print(f"   ❌ فشل")
             
-            # ✅ إرسال الملخص فقط إذا تم إرسال وظيفة واحدة على الأقل فعلياً
+            # ملخص نهائي
             if successfully_sent > 0:
-                summary = f"🎯 <b>تم إرسال {successfully_sent} وظيفة فيديو جديدة بنجاح!</b>\n\n"
+                summary = f"🎯 <b>تم إرسال {successfully_sent} فرصة عمل جديدة!</b>\n\n"
                 summary += f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M')}"
                 self.send_telegram(summary)
-                print(f"\n✅ تم إرسال {successfully_sent} وظيفة بنجاح")
-            else:
-                print(f"\n⚠️ فشل إرسال جميع الوظائف ({len(all_jobs)} وظيفة)")
+                print(f"\n✅ نجح إرسال {successfully_sent} فرصة")
         
         else:
-            # ✅ لا ترسل تنبيه إلا بعد مرور نصف ساعة
-            print("\nℹ️ لا توجد وظائف جديدة في هذه الدورة")
+            print("\nℹ️ لا توجد فرص جديدة")
             
-            # 🔍 تشخيص مفصل
-            print(f"\n📊 تشخيص تفصيلي:")
-            print(f"   🔍 الوظائف المفحوصة: {self.stats['total_checked']}")
-            print(f"   ✅ نجحت في الفلترة: {self.stats['passed_filter']}")
-            print(f"   ⏭️ مكررة (تم إرسالها مسبقاً): {self.stats['already_sent']}")
-            print(f"   💾 إجمالي قاعدة البيانات: {len([k for k in self.job_db.keys() if not k.startswith('_')])} وظيفة")
+            # تشخيص
+            print(f"\n📊 تشخيص:")
+            print(f"   🔍 المفحوصة: {self.stats['total_checked']}")
+            print(f"   ✅ الفلتر: {self.stats['passed_filter']}")
+            print(f"   ⏭️ مكررة: {self.stats['duplicates']}")
             
-            # تحليل السبب
-            if self.stats['total_checked'] == 0:
-                print(f"   ⚠️ السبب: لا يوجد اتصال بالمنصات أو خطأ في API")
-            elif self.stats['passed_filter'] == 0:
-                print(f"   ⚠️ السبب: جميع الوظائف تم استبعادها بواسطة الفلتر")
-            elif self.stats['already_sent'] > 0:
-                print(f"   ⚠️ السبب: جميع الوظائف ({self.stats['already_sent']}) مكررة (تم إرسالها من قبل)")
+            # تنبيه كل 30 دقيقة
+            last_alert = self.job_db.get('_last_alert', {})
+            last_time = last_alert.get('time', '')
             
-            # إرسال تنبيه فقط مرة كل نصف ساعة
-            last_alert = self.job_db.get('_last_no_jobs_alert', {})
-            last_alert_time = last_alert.get('time', '')
-            
-            should_send_alert = False
-            if not last_alert_time:
-                should_send_alert = True
+            should_alert = False
+            if not last_time:
+                should_alert = True
             else:
                 try:
-                    time_diff = (datetime.now() - datetime.fromisoformat(last_alert_time)).total_seconds()
-                    if time_diff > 1800:  # نصف ساعة (30 * 60 = 1800 ثانية)
-                        should_send_alert = True
+                    diff = (datetime.now() - datetime.fromisoformat(last_time)).total_seconds()
+                    if diff > 1800:  # 30 دقيقة
+                        should_alert = True
                 except:
-                    should_send_alert = True
+                    should_alert = True
             
-            if should_send_alert:
-                # تحديد السبب الحقيقي
+            if should_alert:
                 reason = ""
                 if self.stats['total_checked'] == 0:
-                    reason = "لم يتم فحص أي وظائف (مشكلة اتصال؟)"
+                    reason = "لا يوجد اتصال بالمنصات"
                 elif self.stats['passed_filter'] == 0:
-                    reason = f"تم فحص {self.stats['total_checked']} وظيفة لكن لا شيء يطابق الفلتر"
-                elif self.stats['already_sent'] > 0:
-                    reason = f"تم العثور على {self.stats['already_sent']} وظيفة لكنها مكررة"
-                else:
-                    reason = "سبب غير معروف"
+                    reason = f"تم فحص {self.stats['total_checked']} فرصة لكن لا شيء يطابق"
+                elif self.stats['duplicates'] > 0:
+                    reason = f"وجدنا {self.stats['duplicates']} فرصة لكنها مكررة"
                 
-                alert_msg = "ℹ️ <b>لا توجد وظائف فيديو جديدة حالياً</b>\n\n"
-                alert_msg += f"⏰ آخر فحص: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
-                alert_msg += f"📊 الوظائف المفحوصة: {self.stats['total_checked']}\n"
-                alert_msg += f"💾 قاعدة البيانات: {len([k for k in self.job_db.keys() if not k.startswith('_')])} وظيفة\n"
-                alert_msg += f"🔍 السبب: {reason}\n\n"
-                alert_msg += "<i>⏰ التنبيه التالي بعد 30 دقيقة</i>"
+                alert = f"ℹ️ <b>لا توجد فرص جديدة حالياً</b>\n\n"
+                alert += f"⏰ آخر فحص: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
+                alert += f"📊 المفحوصة: {self.stats['total_checked']}\n"
+                alert += f"🔍 السبب: {reason}\n\n"
+                alert += "<i>⏰ التنبيه التالي بعد 30 دقيقة</i>"
                 
-                self.send_telegram(alert_msg)
-                self.job_db['_last_no_jobs_alert'] = {'time': datetime.now().isoformat()}
+                self.send_telegram(alert)
+                self.job_db['_last_alert'] = {'time': datetime.now().isoformat()}
                 self.save_database()
-                print("📨 تم إرسال تنبيه تشخيصي")
-            else:
-                print("⏭️ تخطي إرسال التنبيه (لم يمر نصف ساعة بعد)")
         
-        # ========== النتيجة النهائية ==========
         print("\n" + "="*70)
-        print(f"✅ اكتملت الدورة بنجاح")
-        print(f"📊 النتائج:")
-        print(f"   • وظائف جديدة تم إرسالها: {self.stats['newly_sent']}")
-        print(f"   • إجمالي قاعدة البيانات: {len([k for k in self.job_db.keys() if not k.startswith('_')])} وظيفة")
+        print(f"✅ انتهت الدورة")
+        print(f"📊 تم إرسال: {self.stats['newly_sent']} فرصة")
         print("="*70 + "\n")
         
         return self.stats['newly_sent']
 
 
-# ==================== التشغيل ====================
-
 def main():
     """الدالة الرئيسية"""
     
-    # التحقق من التوكن
     if not os.environ.get('TELEGRAM_TOKEN'):
-        print("\n" + "❌"*30)
-        print("خطأ فادح: TELEGRAM_TOKEN غير موجود!")
+        print("\n❌ خطأ: TELEGRAM_TOKEN غير موجود!")
         print("\nالحل:")
-        print("  export TELEGRAM_TOKEN='your_bot_token_here'")
-        print("  export CHAT_ID='your_chat_id'")
-        print("❌"*30 + "\n")
+        print("  export TELEGRAM_TOKEN='your_token'")
+        print("  export CHAT_ID='your_chat_id'\n")
         return
     
-    # تشغيل البوت
     try:
-        bot = SmartVideoJobBot()
-        jobs_sent = bot.run()
-        
-        print(f"✅ النتيجة النهائية: تم إرسال {jobs_sent} وظيفة جديدة")
+        bot = VideoClientHunterBot()
+        sent = bot.run()
+        print(f"✅ تم إرسال {sent} فرصة جديدة")
         
     except KeyboardInterrupt:
-        print("\n⚠️ تم إيقاف البوت يدوياً (Ctrl+C)")
+        print("\n⚠️ تم الإيقاف (Ctrl+C)")
     except Exception as e:
-        print(f"\n❌ خطأ غير متوقع: {e}")
+        print(f"\n❌ خطأ: {e}")
         import traceback
         traceback.print_exc()
 
