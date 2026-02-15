@@ -1,39 +1,84 @@
-import os, requests, time
+import os
+import json
+import logging
+from telegram import Bot
 
-# بياناتك المباشرة
-TOKEN = "7699373105:AAEu8IHqroR_QcPhWz142cQywaf881xPDE0"
-CHAT_ID = "8497315428"
+# إعداد التسجيل
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
-def send_telegram(text):
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    payload = {'chat_id': CHAT_ID, 'text': text}
-    try:
-        res = requests.post(url, json=payload)
-        return res.status_code == 200
-    except:
+# الكلمات المفتاحية
+KEYWORDS = [
+    "احتاج محرر فيديو",
+    "مطلوب مونتير",
+    "video editor needed",
+    "need video editor"
+]
+
+OFFSET_FILE = "offset.json"
+
+def load_offset():
+    if os.path.exists(OFFSET_FILE):
+        with open(OFFSET_FILE, 'r') as f:
+            data = json.load(f)
+            return data.get('offset', 0)
+    return 0
+
+def save_offset(offset):
+    with open(OFFSET_FILE, 'w') as f:
+        json.dump({'offset': offset}, f)
+
+def contains_keyword(text):
+    if not text:
         return False
+    text_lower = text.lower()
+    for kw in KEYWORDS:
+        if kw.lower() in text_lower:
+            return True
+    return False
 
-def start_hunting():
-    # رسالة تأكيد التشغيل
-    send_telegram("🚀 تم تفعيل البوت الجديد بنجاح! جاري البحث عن وظائف...")
-    
-    queries = ['hiring video editor', 'looking for video editor', 'youtube editor']
-    headers = {'User-Agent': 'Mozilla/5.0'}
-    
-    for q in queries:
-        try:
-            url = f"https://www.reddit.com/search.json?q={q}&sort=new&limit=5"
-            res = requests.get(url, headers=headers)
-            if res.status_code == 200:
-                posts = res.json().get('data', {}).get('children', [])
-                for p in posts:
-                    data = p['data']
-                    msg = f"🎯 فرصة فيديو:\n{data['title']}\n\n🔗 https://reddit.com{data['permalink']}"
-                    send_telegram(msg)
-                    time.sleep(2)
-        except:
-            continue
-    send_telegram("✅ انتهى الفحص الدوري.")
+def main():
+    token = os.getenv("BOT_TOKEN")
+    admin_id = os.getenv("CHAT_ID")
+
+    if not token or not admin_id:
+        logger.error("تأكد من تعيين BOT_TOKEN و CHAT_ID في Secrets")
+        return
+
+    bot = Bot(token)
+    offset = load_offset()
+    logger.info(f"بدء التشغيل بالـ offset: {offset}")
+
+    try:
+        updates = bot.get_updates(offset=offset, timeout=10, allowed_updates=['message'])
+        if not updates:
+            logger.info("لا توجد رسائل جديدة")
+            return
+
+        for update in updates:
+            if update.message and update.message.text:
+                msg = update.message
+                text = msg.text
+                if contains_keyword(text):
+                    alert = (
+                        f"🔔 تم العثور على كلمة مفتاحية!\n"
+                        f"من: {msg.from_user.first_name} (@{msg.from_user.username})\n"
+                        f"النص: {text}\n"
+                        f"الدردشة: {msg.chat_id}"
+                    )
+                    logger.info(alert)
+                    bot.send_message(chat_id=admin_id, text=alert)
+
+        # تحديث offset
+        last_id = updates[-1].update_id
+        save_offset(last_id + 1)
+        logger.info(f"تم حفظ offset الجديد: {last_id + 1}")
+
+    except Exception as e:
+        logger.exception(f"خطأ: {e}")
 
 if __name__ == "__main__":
-    start_hunting()
+    main()
