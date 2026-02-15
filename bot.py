@@ -126,32 +126,46 @@ class VideoClientHunterBot:
     # ==================== الفلتر الذكي ====================
     
     def is_video_opportunity(self, title, description=''):
-        """فحص ذكي: هل هذه فرصة فيديو؟"""
+        """فحص ذكي جداً: هل هذه فرصة فيديو؟"""
         title_lower = title.lower().strip()
         desc_lower = description.lower()[:800]
+        combined = f"{title_lower} {desc_lower}"
         
         # ========== خطوة 1: هل تحتوي على كلمة فيديو؟ ==========
         has_video_keyword = False
+        matched_keyword = ""
+        
         for keyword in self.video_keywords:
-            if keyword in title_lower or keyword in desc_lower:
+            if keyword in combined:  # ✅ نبحث في العنوان + الوصف معاً
                 has_video_keyword = True
+                matched_keyword = keyword
                 print(f"   ✅ وجدت: '{keyword}'")
                 break
         
         if not has_video_keyword:
-            print(f"   ❌ لا توجد كلمات فيديو")
+            # محاولة أخيرة: ابحث عن "video" أو "editor" أو "editing" منفردة
+            simple_keywords = ['video', 'editing', 'editor', 'motion', 'montage']
+            for kw in simple_keywords:
+                if kw in title_lower:
+                    has_video_keyword = True
+                    matched_keyword = kw
+                    print(f"   ✅ وجدت كلمة بسيطة: '{kw}'")
+                    break
+        
+        if not has_video_keyword:
+            print(f"   ❌ لا توجد كلمات فيديو (العنوان: {title_lower[:60]})")
             return False
         
-        # ========== خطوة 2: استبعاد ذكي ==========
-        # فقط أول 4 كلمات من العنوان
-        first_words = ' '.join(title_lower.split()[:4])
+        # ========== خطوة 2: استبعاد ذكي (فقط الصارم) ==========
+        # فقط أول 3 كلمات من العنوان
+        first_words = ' '.join(title_lower.split()[:3])
         
         for exclude in self.exclude_titles:
             if exclude in first_words:
-                print(f"   ❌ استبعاد: '{exclude}' في العنوان")
+                print(f"   ❌ استبعاد: '{exclude}' في بداية العنوان")
                 return False
         
-        print(f"   ✅ فرصة صالحة!")
+        print(f"   ✅ فرصة صالحة! (وجدت: {matched_keyword})")
         return True
     
     # ==================== البحث في المنصات ====================
@@ -184,6 +198,13 @@ class VideoClientHunterBot:
             data = response.json()
             print(f"   📊 الوظائف: {len(data)}")
             
+            # 🔍 وضع التشخيص: اطبع أول 5 وظائف
+            print(f"\n   🔍 عينة من الوظائف (أول 5):")
+            for i, job in enumerate(data[1:6]):  # أول 5 فقط
+                title = job.get('position', 'بدون عنوان')
+                print(f"   {i+1}. {title}")
+            print()
+            
             for job in data[1:]:  # تخطي metadata
                 try:
                     self.stats['total_checked'] += 1
@@ -196,7 +217,9 @@ class VideoClientHunterBot:
                     if not title or not url:
                         continue
                     
-                    print(f"\n🔎 {title[:50]}...")
+                    # اطبع فقط أول 20 وظيفة للتشخيص
+                    if self.stats['total_checked'] <= 20:
+                        print(f"\n🔎 [{self.stats['total_checked']}] {title[:60]}...")
                     
                     if not self.is_video_opportunity(title, desc):
                         continue
