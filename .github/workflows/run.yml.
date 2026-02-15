@@ -11,9 +11,4 @@ jobs:
       - name: Install dependencies
         run: pip install requests
       - name: Run Bot
-        run: |
-          if [ -f "Job-Bot/bot.py" ]; then
-            python Job-Bot/bot.py
-          elif [ -f "bot.py" ]; then
-            python bot.py
-          else
+        run: python bot.py
