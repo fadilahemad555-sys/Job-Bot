@@ -1,14 +1,35 @@
-name: Video Job Hunter
+name: تشغيل البوت الدوري
+
 on:
-  workflow_dispatch:
   schedule:
     - cron: '*/30 * * * *'
+  workflow_dispatch:
+
 jobs:
   run-bot:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - name: Install dependencies
-        run: pip install requests
-      - name: Run Bot
-        run: python bot.py
+      - name: استنساخ المستودع
+        uses: actions/checkout@v4
+
+      - name: إعداد Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      # استرجاع آخر قيمة offset من cache
+      - name: استرجاع Cache
+        uses: actions/cache@v3
+        id: cache-offset
+        with:
+          path: offset.json
+          key: offset-cache
+
+      - name: تثبيت المكتبات
+        run: pip install python-telegram-bot
+
+      - name: تشغيل البوت
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+        run: python bot.py   # <-- تأكد أن bot.py في الجذر وليس في مجلد فرعي
