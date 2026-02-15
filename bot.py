@@ -1,0 +1,61 @@
+import os
+import requests
+import time
+
+# قائمة الـ subreddits التي تحتوي غالباً على طلبات عمل
+SUBREDDITS = ['forhire', 'jobs', 'freelance', 'videoediting', 'videography']
+
+# كلمات مفتاحية بسيطة وأوسع
+KEYWORDS = [
+    # إنجليزية
+    "video editor", "edit videos", "video editing", "looking for editor",
+    "need editor", "hiring video", "motion graphics", "video production",
+    # عربية
+    "محرر فيديو", "مونتير", "مونتاج", "فيديو", "إنتاج فيديو"
+]
+
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
+
+def send_telegram(message):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    payload = {'chat_id': CHAT_ID, 'text': message, 'parse_mode': 'HTML'}
+    try:
+        requests.post(url, json=payload)
+    except:
+        pass
+
+def search_reddit():
+    found_links = []
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+
+    for sub in SUBREDDITS:
+        for kw in KEYWORDS:
+            try:
+                # بحث في subreddit محدد
+                url = f"https://www.reddit.com/r/{sub}/search.json?q={kw}&restrict_sr=on&sort=new&limit=5"
+                res = requests.get(url, headers=headers)
+                if res.status_code == 200:
+                    data = res.json()
+                    posts = data.get('data', {}).get('children', [])
+                    for post in posts:
+                        p = post['data']
+                        title = p['title']
+                        permalink = p['permalink']
+                        full_url = f"https://reddit.com{permalink}"
+                        if full_url not in found_links:
+                            found_links.append(full_url)
+                            msg = f"🔔 <b>r/{sub}</b> - {kw}\n\n{title}\n\n🔗 {full_url}"
+                            send_telegram(msg)
+                            time.sleep(1)
+            except Exception as e:
+                print(f"خطأ في {sub}/{kw}: {e}")
+                continue
+
+if __name__ == "__main__":
+    if not BOT_TOKEN or not CHAT_ID:
+        send_telegram("❌ خطأ: تأكد من إعداد التوكن و CHAT_ID")
+        exit()
+    send_telegram("🚀 بدء البحث المحسّن...")
+    search_reddit()
+    send_telegram("✅ انتهى البحث.")
