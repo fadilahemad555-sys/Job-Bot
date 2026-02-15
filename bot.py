@@ -237,6 +237,156 @@ class VideoClientHunterBot:
         
         return opportunities
     
+    def search_reddit_videoediting(self):
+        """البحث في Reddit r/VideoEditing"""
+        print(f"\n🔍 البحث في Reddit r/VideoEditing...")
+        opportunities = []
+        
+        try:
+            url = 'https://www.reddit.com/r/VideoEditing/new.json?limit=50'
+            
+            response = self.safe_request(url)
+            if not response:
+                return []
+            
+            data = response.json()
+            posts = data.get('data', {}).get('children', [])
+            
+            print(f"   📊 المنشورات: {len(posts)}")
+            
+            for post_data in posts:
+                try:
+                    post = post_data.get('data', {})
+                    self.stats['total_checked'] += 1
+                    
+                    title = post.get('title', '')
+                    author = post.get('author', 'Unknown')
+                    url_post = f"https://reddit.com{post.get('permalink', '')}"
+                    desc = post.get('selftext', '')
+                    
+                    # نبحث عن كلمات مثل: hiring, looking for, need editor
+                    hiring_keywords = ['hiring', 'looking for', 'need editor', 'need video editor', 
+                                      'seeking', 'job opportunity', 'paid gig']
+                    
+                    title_lower = title.lower()
+                    has_hiring = any(keyword in title_lower or keyword in desc.lower()[:200] 
+                                    for keyword in hiring_keywords)
+                    
+                    if not has_hiring:
+                        continue
+                    
+                    print(f"\n🔎 r/VideoEditing: {title[:50]}...")
+                    
+                    # هذه منشورات توظيف بالفعل
+                    self.stats['passed_filter'] += 1
+                    
+                    job_id = self.generate_id(title, author, url_post)
+                    if self.is_duplicate(job_id):
+                        print(f"   ⏭️ مكررة")
+                        self.stats['duplicates'] += 1
+                        continue
+                    
+                    opp = {
+                        'id': job_id,
+                        'type': 'مشروع Freelance',
+                        'platform': 'Reddit r/VideoEditing',
+                        'title': title,
+                        'company': f"u/{author}",
+                        'url': url_post,
+                        'description': desc[:500] if desc else 'لا يوجد وصف - تحقق من الرابط',
+                        'salary': 'غير محدد',
+                        'location': 'Remote',
+                        'tags': ''
+                    }
+                    
+                    opportunities.append(opp)
+                    print(f"   ✅ فرصة من r/VideoEditing!")
+                    
+                except Exception as e:
+                    print(f"   ⚠️ خطأ: {e}")
+            
+            print(f"\n✅ r/VideoEditing: {len(opportunities)} فرصة")
+            
+        except Exception as e:
+            print(f"❌ خطأ r/VideoEditing: {e}")
+        
+        return opportunities
+    
+    def search_reddit(self):
+        """البحث في Reddit r/forhire"""
+        print(f"\n🔍 البحث في Reddit r/forhire...")
+        opportunities = []
+        
+        try:
+            # Reddit JSON API (بدون مصادقة)
+            url = 'https://www.reddit.com/r/forhire/new.json?limit=50'
+            
+            response = self.safe_request(url)
+            if not response:
+                return []
+            
+            data = response.json()
+            posts = data.get('data', {}).get('children', [])
+            
+            print(f"   📊 المنشورات: {len(posts)}")
+            
+            for post_data in posts:
+                try:
+                    post = post_data.get('data', {})
+                    self.stats['total_checked'] += 1
+                    
+                    title = post.get('title', '')
+                    author = post.get('author', 'Unknown')
+                    url = f"https://reddit.com{post.get('permalink', '')}"
+                    desc = post.get('selftext', '')
+                    
+                    # تخطي منشورات [For Hire] (محررين يبحثون عن عمل)
+                    # نريد فقط [Hiring] (عملاء يبحثون عن محررين)
+                    if '[for hire]' in title.lower():
+                        continue
+                    
+                    if not title or not url:
+                        continue
+                    
+                    print(f"\n🔎 Reddit: {title[:50]}...")
+                    
+                    if not self.is_video_opportunity(title, desc):
+                        continue
+                    
+                    self.stats['passed_filter'] += 1
+                    
+                    job_id = self.generate_id(title, author, url)
+                    if self.is_duplicate(job_id):
+                        print(f"   ⏭️ مكررة")
+                        self.stats['duplicates'] += 1
+                        continue
+                    
+                    opp = {
+                        'id': job_id,
+                        'type': 'مشروع Freelance',
+                        'platform': 'Reddit r/forhire',
+                        'title': title.replace('[Hiring]', '').replace('[HIRING]', '').strip(),
+                        'company': f"u/{author}",
+                        'url': url,
+                        'description': desc[:500] if desc else 'لا يوجد وصف - تحقق من الرابط',
+                        'salary': 'غير محدد',
+                        'location': 'Remote',
+                        'tags': ''
+                    }
+                    
+                    opportunities.append(opp)
+                    print(f"   ✅ فرصة Reddit جديدة!")
+                    
+                except Exception as e:
+                    print(f"   ⚠️ خطأ: {e}")
+            
+            print(f"\n✅ Reddit: {len(opportunities)} فرصة جديدة")
+            
+        except Exception as e:
+            print(f"❌ خطأ Reddit: {e}")
+        
+        return opportunities
+    
     def search_wwr(self):
         """البحث في We Work Remotely"""
         print(f"\n🔍 البحث في We Work Remotely...")
@@ -392,6 +542,8 @@ class VideoClientHunterBot:
         platforms = [
             self.search_remoteok,
             self.search_wwr,
+            self.search_reddit,  # ✅ r/forhire
+            self.search_reddit_videoediting,  # ✅ r/VideoEditing
         ]
         
         for platform_func in platforms:
