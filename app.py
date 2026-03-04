@@ -1,7 +1,7 @@
 # ============================================================
-# منصة بريكولات - الجزء الأول (الإعدادات والنماذج والدوال المساعدة) - جاهز للنشر
+# منصة بريكولات - الجزء الأول (الإعدادات والنماذج والدوال المساعدة) - نسخة معدلة
 # ============================================================
-# هذا هو النصف الأول من ملف app.py الموحد. أضف هذا الكود في ملف app.py
+# انسخ هذا الكود في ملف app.py (الجزء الأول)
 
 import os
 import re
@@ -200,7 +200,7 @@ with app.app_context():
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# ================== دوال مساعدة ==================
+# ================== دوال مساعدة محسنة ==================
 
 def contains_blocked_patterns(text):
     if not text: return False
@@ -231,20 +231,34 @@ def get_artisan_rating(artisan_id):
     return round(avg, 1), len(ratings)
 
 def upload_file_to_cloudinary(file, folder="bricolets", resource_type="auto"):
-    if not file: return None
+    """دالة محسنة لرفع الملفات مع رسائل خطأ أوضح"""
+    if not file:
+        return None
     try:
         result = cloudinary.uploader.upload(file, folder=folder, resource_type=resource_type)
-        return result['secure_url']
+        secure_url = result.get('secure_url')
+        if secure_url:
+            return secure_url
+        else:
+            flash('فشل رفع الملف: لم يتم استلام رابط من Cloudinary', 'danger')
+            return None
+    except cloudinary.exceptions.Error as e:
+        flash(f'خطأ في Cloudinary: {str(e)}', 'danger')
+        print(f"❌ خطأ Cloudinary: {e}")
+        return None
     except Exception as e:
-        print(f"خطأ في رفع الملف: {e}")
+        flash(f'خطأ غير متوقع في رفع الملف: {str(e)}', 'danger')
+        print(f"❌ خطأ عام: {e}")
         return None
 
 def upload_multiple_files(files, folder="bricolets"):
+    """رفع عدة ملفات مع تجميع الأخطاء"""
     urls = []
     for file in files:
         if file and file.filename:
             url = upload_file_to_cloudinary(file, folder=folder, resource_type="image")
-            if url: urls.append(url)
+            if url:
+                urls.append(url)
     return ','.join(urls)
 
 def normalize_city(city):
@@ -264,11 +278,24 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-app.jinja_env.globals.update(time_ago=time_ago, get_unread_messages_count=get_unread_messages_count)
+# دالة مساعدة للروابط الذكية
+def dashboard_url_for(user):
+    """إرجاع الرابط المناسب للوحة تحكم المستخدم"""
+    if user.is_authenticated:
+        if is_admin_user(user):
+            return url_for('admin_dashboard')
+        elif user.user_type == 'client':
+            return url_for('client_dashboard')
+        elif user.user_type == 'artisan':
+            return url_for('artisan_dashboard')
+    return url_for('index')
 
+app.jinja_env.globals.update(time_ago=time_ago, get_unread_messages_count=get_unread_messages_count, dashboard_url_for=dashboard_url_for)
+
+print("✅ الجزء الأول اكتمل مع تحسينات معالجة الأخطاء وإضافة دالة dashboard_url_for")
 # ============ نهاية الجزء الأول ============
 # ============================================================
-# منصة بريكولات - الجزء الثاني (المسارات وتشغيل التطبيق)
+# منصة بريكولات - الجزء الثاني (المسارات وتشغيل التطبيق) - نسخة معدلة
 # أضف هذا الكود بعد السطر "# ============ نهاية الجزء الأول ============"
 # في نفس ملف app.py
 # ============================================================
@@ -277,6 +304,9 @@ app.jinja_env.globals.update(time_ago=time_ago, get_unread_messages_count=get_un
 
 @app.route('/')
 def index():
+    # إذا كان المستخدم مسجلاً، نوجهه إلى لوحة التحكم المناسبة
+    if current_user.is_authenticated:
+        return redirect(dashboard_url_for(current_user))
     total_users = User.query.count()
     total_requests = Request.query.count()
     total_artisans = User.query.filter_by(user_type='artisan').count()
@@ -315,11 +345,10 @@ def index():
             👥 {{ total_users }} | 🔨 {{ total_artisans }}
         </div>
         <nav class="navbar navbar-expand-lg"><div class="container">
-            <a class="navbar-brand" href="/">بريكولات</a>
+            <a class="navbar-brand" href="{{ url_for('index') if not current_user.is_authenticated else dashboard_url_for(current_user) }}">بريكولات</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
-                    <li class="nav-item"><a class="nav-link" href="/">الرئيسية</a></li>
                     <li class="nav-item"><a class="nav-link" href="/artisans">الحرفيين</a></li>
                     <li class="nav-item"><a class="nav-link" href="/search">الطلبات</a></li>
                 </ul>
@@ -1654,7 +1683,7 @@ def start_chat(request_id, artisan_id):
         db.session.commit()
     return redirect(url_for('view_chat', chat_id=chat.id))
 
-# ================== صفحة الدردشة ==================
+# ================== صفحة الدردشة (معدلة مع تحسين زر الموقع) ==================
 @app.route('/chat/<int:chat_id>', methods=['GET','POST'])
 @login_required
 def view_chat(chat_id):
