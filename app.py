@@ -1,5 +1,5 @@
 # ============================================================
-# منصة بريكولات - الجزء الأول (الإعدادات والنماذج والدوال المساعدة) - نسخة معدلة
+# منصة بريكولات - الجزء الأول (الإعدادات والنماذج والدوال المساعدة) - نسخة معدلة للتخزين المحلي
 # ============================================================
 # انسخ هذا الكود في ملف app.py (الجزء الأول)
 
@@ -8,35 +8,37 @@ import re
 from datetime import datetime
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 
-import cloudinary
-import cloudinary.uploader
-import cloudinary.api
-
-from flask import Flask, render_template_string, request, redirect, url_for, flash
+# ================== إعدادات التطبيق ==================
+from flask import Flask, render_template_string, request, redirect, url_for, flash, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 
-# ================== إعدادات التطبيق ==================
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'bricolets-super-secret-key')
 
 # استخدام PostgreSQL في الإنتاج، أو SQLite للتطوير المحلي
 database_url = os.environ.get('DATABASE_URL')
 if database_url and database_url.startswith('postgres://'):
-    # تصحيح عنوان URL لـ SQLAlchemy 1.4+
     database_url = database_url.replace('postgres://', 'postgresql://', 1)
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///bricolets.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
 
-# ================== إعدادات Cloudinary ==================
-cloudinary.config(
-    cloud_name = "dg85snxfe",
-    api_key = "951465375265687",
-    api_secret = "TIc-tWEmB-vBMthHqduf_GCwtVs",
-    secure = True
-)
+# ================== إعدادات التخزين المحلي ==================
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'mp4', 'mp3', 'wav', 'ogg', 'webm'}
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
+
+# إنشاء مجلد uploads إذا لم يكن موجوداً
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(os.path.join(UPLOAD_FOLDER, 'users'), exist_ok=True)
+os.makedirs(os.path.join(UPLOAD_FOLDER, 'requests'), exist_ok=True)
+os.makedirs(os.path.join(UPLOAD_FOLDER, 'offers'), exist_ok=True)
+os.makedirs(os.path.join(UPLOAD_FOLDER, 'chats'), exist_ok=True)
+os.makedirs(os.path.join(UPLOAD_FOLDER, 'artisans'), exist_ok=True)
 
 # ================== إعدادات SQLAlchemy و Login ==================
 db = SQLAlchemy(app)
@@ -58,10 +60,10 @@ class User(UserMixin, db.Model):
     district = db.Column(db.String(100), nullable=True)
     age = db.Column(db.Integer, nullable=True)
     gender = db.Column(db.String(10), nullable=True)
-    profile_image = db.Column(db.String(200), nullable=True)
+    profile_image = db.Column(db.String(200), nullable=True)  # مسار الصورة (نسبي)
     specialty = db.Column(db.String(50), nullable=True)
     video_work = db.Column(db.String(200), nullable=True)
-    portfolio = db.Column(db.Text, nullable=True)
+    portfolio = db.Column(db.Text, nullable=True)  # روابط مفصولة بفواصل
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     # سنوات الخبرة للحرفي
     experience_years = db.Column(db.Integer, nullable=True)
@@ -81,7 +83,7 @@ class Request(db.Model):
     description = db.Column(db.Text, nullable=False)
     specialty = db.Column(db.String(50), nullable=False)
     district = db.Column(db.String(100), nullable=False)
-    images = db.Column(db.Text, nullable=True)
+    images = db.Column(db.Text, nullable=True)  # روابط مفصولة بفواصل
     voice = db.Column(db.String(200), nullable=True)
     video = db.Column(db.String(200), nullable=True)
     client_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -153,7 +155,7 @@ with app.app_context():
                 district='مراكش - جليز',
                 age=35,
                 gender='ذكر',
-                profile_image='https://res.cloudinary.com/demo/image/upload/v1/sample.jpg'
+                profile_image='/static/placeholder.jpg'  # صورة افتراضية
             )
             db.session.add(admin)
             print("➕ تم إضافة مستخدم الزبون التجريبي.")
@@ -169,9 +171,9 @@ with app.app_context():
                 district='مراكش - جليز',
                 age=40,
                 gender='ذكر',
-                profile_image='https://res.cloudinary.com/demo/image/upload/v1/sample.jpg',
-                video_work='https://res.cloudinary.com/demo/video/upload/v1/work.mp4',
-                portfolio='https://res.cloudinary.com/demo/image/upload/v1/work1.jpg,https://res.cloudinary.com/demo/image/upload/v1/work2.jpg',
+                profile_image='/static/placeholder.jpg',
+                video_work='',
+                portfolio='',
                 experience_years=8
             )
             db.session.add(artisan)
@@ -185,7 +187,8 @@ with app.app_context():
                 user_type='client',
                 full_name='هشام',
                 district='مراكش',
-                is_admin=True
+                is_admin=True,
+                profile_image='/static/placeholder.jpg'
             )
             db.session.add(hicham_admin)
             print("➕ تم إضافة حساب الأدمن.")
@@ -200,7 +203,60 @@ with app.app_context():
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# ================== دوال مساعدة محسنة ==================
+# ================== دوال مساعدة للتخزين المحلي ==================
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def save_file_to_local(file, subfolder=''):
+    """حفظ ملف محلياً وإرجاع المسار النسبي"""
+    if not file or not file.filename:
+        return None
+    if not allowed_file(file.filename):
+        flash('نوع الملف غير مسموح به', 'danger')
+        return None
+    try:
+        # تأمين اسم الملف
+        filename = secure_filename(file.filename)
+        # إضافة طابع زمني لتجنب التكرار
+        name, ext = os.path.splitext(filename)
+        timestamp = datetime.now().strftime('%Y%m%d%H%M%S%f')
+        new_filename = f"{name}_{timestamp}{ext}"
+        # المسار الكامل للتخزين
+        folder_path = os.path.join(app.config['UPLOAD_FOLDER'], subfolder)
+        os.makedirs(folder_path, exist_ok=True)
+        file_path = os.path.join(folder_path, new_filename)
+        file.save(file_path)
+        # إرجاع المسار النسبي (سيتم خدمته عبر route /uploads/)
+        return f'/uploads/{subfolder}/{new_filename}'
+    except Exception as e:
+        print(f"❌ خطأ في حفظ الملف: {e}")
+        flash('حدث خطأ أثناء حفظ الملف', 'danger')
+        return None
+
+def save_multiple_files(files, subfolder=''):
+    """حفظ عدة ملفات وإرجاع روابط مفصولة بفواصل"""
+    urls = []
+    for file in files:
+        if file and file.filename:
+            url = save_file_to_local(file, subfolder)
+            if url:
+                urls.append(url)
+    return ','.join(urls)
+
+def delete_file(file_url):
+    """حذف ملف من الخادم (إذا كان محلياً)"""
+    if not file_url or not file_url.startswith('/uploads/'):
+        return
+    try:
+        file_path = file_url.replace('/uploads/', '', 1)
+        full_path = os.path.join(app.config['UPLOAD_FOLDER'], file_path)
+        if os.path.exists(full_path):
+            os.remove(full_path)
+    except Exception as e:
+        print(f"❌ خطأ في حذف الملف: {e}")
+
+# ================== دوال مساعدة أخرى ==================
 
 def contains_blocked_patterns(text):
     if not text: return False
@@ -229,37 +285,6 @@ def get_artisan_rating(artisan_id):
     if not ratings: return 0, 0
     avg = sum(r.score for r in ratings if r.score) / len(ratings)
     return round(avg, 1), len(ratings)
-
-def upload_file_to_cloudinary(file, folder="bricolets", resource_type="auto"):
-    """دالة محسنة لرفع الملفات مع رسائل خطأ أوضح"""
-    if not file:
-        return None
-    try:
-        result = cloudinary.uploader.upload(file, folder=folder, resource_type=resource_type)
-        secure_url = result.get('secure_url')
-        if secure_url:
-            return secure_url
-        else:
-            flash('فشل رفع الملف: لم يتم استلام رابط من Cloudinary', 'danger')
-            return None
-    except cloudinary.exceptions.Error as e:
-        flash(f'خطأ في Cloudinary: {str(e)}', 'danger')
-        print(f"❌ خطأ Cloudinary: {e}")
-        return None
-    except Exception as e:
-        flash(f'خطأ غير متوقع في رفع الملف: {str(e)}', 'danger')
-        print(f"❌ خطأ عام: {e}")
-        return None
-
-def upload_multiple_files(files, folder="bricolets"):
-    """رفع عدة ملفات مع تجميع الأخطاء"""
-    urls = []
-    for file in files:
-        if file and file.filename:
-            url = upload_file_to_cloudinary(file, folder=folder, resource_type="image")
-            if url:
-                urls.append(url)
-    return ','.join(urls)
 
 def normalize_city(city):
     if not city:
@@ -290,12 +315,22 @@ def dashboard_url_for(user):
             return url_for('artisan_dashboard')
     return url_for('index')
 
-app.jinja_env.globals.update(time_ago=time_ago, get_unread_messages_count=get_unread_messages_count, dashboard_url_for=dashboard_url_for)
+# خدمة الملفات المرفوعة
+@app.route('/uploads/<path:filename>')
+def uploaded_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-print("✅ الجزء الأول اكتمل مع تحسينات معالجة الأخطاء وإضافة دالة dashboard_url_for")
+app.jinja_env.globals.update(
+    time_ago=time_ago,
+    get_unread_messages_count=get_unread_messages_count,
+    dashboard_url_for=dashboard_url_for
+)
+
+print("✅ الجزء الأول اكتمل مع تحسينات التخزين المحلي وإضافة خدمة الملفات.")
 # ============ نهاية الجزء الأول ============
+```python
 # ============================================================
-# منصة بريكولات - الجزء الثاني (المسارات وتشغيل التطبيق) - نسخة معدلة
+# منصة بريكولات - الجزء الثاني (المسارات وتشغيل التطبيق) - نسخة معدلة للتخزين المحلي
 # أضف هذا الكود بعد السطر "# ============ نهاية الجزء الأول ============"
 # في نفس ملف app.py
 # ============================================================
@@ -410,7 +445,7 @@ def index():
                     {% for artisan in artisans[:4] %}
                     <div class="col-md-3 mb-3">
                         <div class="card text-center">
-                            <img src="{{ artisan.profile_image or 'https://via.placeholder.com/150' }}" class="card-img-top" style="height:150px; object-fit:cover;">
+                            <img src="{{ artisan.profile_image or '/static/placeholder.jpg' }}" class="card-img-top" style="height:150px; object-fit:cover;">
                             <div class="card-body">
                                 <h5><a href="/user/{{ artisan.id }}">{{ artisan.full_name or artisan.username }}</a></h5>
                                 <p class="text-muted">{{ artisan.specialty }} - {{ artisan.district or 'غير محدد' }}</p>
@@ -457,7 +492,7 @@ def artisans_list():
             {% for item in artisans_with_rating %}
             <div class="col-md-4 mb-4">
                 <div class="card h-100">
-                    <img src="{{ item.artisan.profile_image or 'https://via.placeholder.com/300' }}" class="card-img-top" style="height:200px; object-fit:cover;">
+                    <img src="{{ item.artisan.profile_image or '/static/placeholder.jpg' }}" class="card-img-top" style="height:200px; object-fit:cover;">
                     <div class="card-body">
                         <h5 class="card-title"><a href="/user/{{ item.artisan.id }}">{{ item.artisan.full_name or item.artisan.username }}</a></h5>
                         <p>
@@ -512,7 +547,7 @@ def search():
                 <div class="card request-card">
                     <div class="card-body">
                         <div class="client-info">
-                            <img src="{{ req.client.profile_image or 'https://via.placeholder.com/40' }}" class="client-img">
+                            <img src="{{ req.client.profile_image or '/static/placeholder.jpg' }}" class="client-img">
                             <div>
                                 <strong><a href="/user/{{ req.client.id }}">{{ req.client.full_name or req.client.username }}</a></strong><br>
                                 <small>{{ req.district }} · {{ time_ago(req.created_at) }}</small>
@@ -732,10 +767,9 @@ def complete_profile():
         
         if 'profile_image' in request.files:
             file = request.files['profile_image']
-            if file and file.filename:
-                url = upload_file_to_cloudinary(file, folder=f"users/{current_user.id}", resource_type="image")
-                if url:
-                    current_user.profile_image = url
+            url = save_file_to_local(file, subfolder=f"users/{current_user.id}")
+            if url:
+                current_user.profile_image = url
         
         if current_user.user_type == 'artisan':
             specialty = request.form.get('specialty', '').strip()
@@ -746,16 +780,14 @@ def complete_profile():
                 current_user.experience_years = int(experience)
             if 'work_images' in request.files:
                 files = request.files.getlist('work_images')
-                if files and files[0].filename:
-                    urls = upload_multiple_files(files, folder=f"artisans/{current_user.id}/works")
-                    if urls:
-                        current_user.portfolio = urls
+                urls = save_multiple_files(files, subfolder=f"artisans/{current_user.id}/works")
+                if urls:
+                    current_user.portfolio = urls
             if 'work_video' in request.files:
                 file = request.files['work_video']
-                if file and file.filename:
-                    url = upload_file_to_cloudinary(file, folder=f"artisans/{current_user.id}", resource_type="video")
-                    if url:
-                        current_user.video_work = url
+                url = save_file_to_local(file, subfolder=f"artisans/{current_user.id}")
+                if url:
+                    current_user.video_work = url
         
         db.session.commit()
         flash('تم إكمال الملف الشخصي بنجاح')
@@ -826,12 +858,14 @@ def profile():
         # التحقق مما إذا كان هذا الطلب هو لرفع صورة فقط (لا توجد بيانات نصية)
         if 'profile_image' in request.files and len(request.form) == 0:
             file = request.files['profile_image']
-            if file and file.filename:
-                url = upload_file_to_cloudinary(file, folder=f"users/{current_user.id}", resource_type="image")
-                if url:
-                    current_user.profile_image = url
-                    db.session.commit()
-                    flash('تم تحديث الصورة الشخصية')
+            url = save_file_to_local(file, subfolder=f"users/{current_user.id}")
+            if url:
+                # حذف الصورة القديمة إذا كانت محلية
+                if current_user.profile_image and current_user.profile_image.startswith('/uploads/'):
+                    delete_file(current_user.profile_image)
+                current_user.profile_image = url
+                db.session.commit()
+                flash('تم تحديث الصورة الشخصية')
             return redirect(url_for('profile'))
         
         # تحديث البيانات
@@ -841,8 +875,11 @@ def profile():
         if 'profile_image' in request.files:
             file = request.files['profile_image']
             if file and file.filename:
-                url = upload_file_to_cloudinary(file, folder=f"users/{current_user.id}", resource_type="image")
+                url = save_file_to_local(file, subfolder=f"users/{current_user.id}")
                 if url:
+                    # حذف الصورة القديمة إذا كانت محلية
+                    if current_user.profile_image and current_user.profile_image.startswith('/uploads/'):
+                        delete_file(current_user.profile_image)
                     current_user.profile_image = url
         
         if current_user.user_type == 'artisan':
@@ -853,12 +890,16 @@ def profile():
             if 'video_work' in request.files:
                 file = request.files['video_work']
                 if file and file.filename:
-                    url = upload_file_to_cloudinary(file, folder=f"artisans/{current_user.id}", resource_type="video")
-                    if url: current_user.video_work = url
+                    # حذف الفيديو القديم إذا كان محلياً
+                    if current_user.video_work and current_user.video_work.startswith('/uploads/'):
+                        delete_file(current_user.video_work)
+                    url = save_file_to_local(file, subfolder=f"artisans/{current_user.id}")
+                    if url:
+                        current_user.video_work = url
             if 'new_portfolio' in request.files:
                 files = request.files.getlist('new_portfolio')
                 if files and files[0].filename:
-                    urls = upload_multiple_files(files, folder=f"artisans/{current_user.id}/portfolio")
+                    urls = save_multiple_files(files, subfolder=f"artisans/{current_user.id}/portfolio")
                     if urls:
                         old_urls = current_user.portfolio.split(',') if current_user.portfolio else []
                         all_urls = old_urls + urls.split(',')
@@ -869,6 +910,9 @@ def profile():
                     urls = current_user.portfolio.split(',')
                     if img_to_delete in urls:
                         urls.remove(img_to_delete)
+                        # حذف الملف من الخادم إذا كان محلياً
+                        if img_to_delete.startswith('/uploads/'):
+                            delete_file(img_to_delete)
                         current_user.portfolio = ','.join(urls) if urls else None
         
         db.session.commit()
@@ -905,7 +949,7 @@ def profile():
     <div class="stats-mini">👥 {{ User.query.count() }} | 🔨 {{ User.query.filter_by(user_type='artisan').count() }}</div>
     <div class="container mt-5" style="max-width:800px;">
         <div class="profile-header text-center">
-            <img src="{{ current_user.profile_image or 'https://via.placeholder.com/200' }}" class="profile-img mb-3">
+            <img src="{{ current_user.profile_image or '/static/placeholder.jpg' }}" class="profile-img mb-3">
             
             <div>
                 {% if current_user.profile_image %}
@@ -1046,7 +1090,7 @@ def public_profile(user_id):
     <div class="stats-mini">👥 {{ User.query.count() }} | 🔨 {{ User.query.filter_by(user_type='artisan').count() }}</div>
     <div class="container mt-5" style="max-width:800px;">
         <div class="profile-header">
-            <img src="{{ user.profile_image or 'https://via.placeholder.com/200' }}" class="profile-img mb-3">
+            <img src="{{ user.profile_image or '/static/placeholder.jpg' }}" class="profile-img mb-3">
             <h2>{{ user.full_name or user.username }}</h2>
             <p class="text-muted">{{ user.district or 'غير محدد' }}</p>
             {% if user.user_type == 'artisan' %}
@@ -1072,7 +1116,7 @@ def public_profile(user_id):
             <div class="portfolio-grid">
                 {% for link in portfolio_list %}
                 <div class="portfolio-item" onclick="openModal('{{ link }}')">
-                    <img src="{{ link }}" class="portfolio-img" onerror="this.onerror=null; this.src='https://via.placeholder.com/200?text=صورة+غير+متاحة';">
+                    <img src="{{ link }}" class="portfolio-img" onerror="this.onerror=null; this.src='/static/placeholder.jpg';">
                 </div>
                 {% endfor %}
             </div>
@@ -1084,7 +1128,7 @@ def public_profile(user_id):
             <h3 class="portfolio-title">🎥 فيديو العمل</h3>
             <div class="portfolio-grid">
                 <div class="portfolio-item video-thumb" onclick="openVideo('{{ user.video_work }}')">
-                    <img src="https://img.youtube.com/vi/{{ user.video_work.split('/')[-1] }}/0.jpg" class="portfolio-img" onerror="this.onerror=null; this.src='https://via.placeholder.com/200?text=فيديو';">
+                    <img src="/static/video_placeholder.jpg" class="portfolio-img" onerror="this.onerror=null; this.src='/static/placeholder.jpg';">
                 </div>
             </div>
         </div>
@@ -1284,7 +1328,7 @@ def artisan_dashboard():
                     <div class="card">
                         <div class="card-body">
                             <div style="display:flex; align-items:center; margin-bottom:10px;">
-                                <img src="{{ req.client.profile_image or 'https://via.placeholder.com/40' }}" style="width:40px;height:40px;border-radius:50%; object-fit:cover; margin-left:10px;">
+                                <img src="{{ req.client.profile_image or '/static/placeholder.jpg' }}" style="width:40px;height:40px;border-radius:50%; object-fit:cover; margin-left:10px;">
                                 <div>
                                     <strong><a href="/user/{{ req.client.id }}">{{ req.client.full_name or req.client.username }}</a></strong><br>
                                     <small>{{ req.district }} · {{ time_ago(req.created_at) }}</small>
@@ -1323,8 +1367,7 @@ def post_request():
         
         if 'images' in request.files:
             files = request.files.getlist('images')
-            if files and files[0].filename:
-                images = upload_multiple_files(files, folder="requests")
+            images = save_multiple_files(files, subfolder=f"requests")
         
         new_req = Request(
             title=title, 
@@ -1413,16 +1456,13 @@ def send_offer(request_id):
         images = voice = video = ''
         if 'images' in request.files:
             files = request.files.getlist('images')
-            if files and files[0].filename:
-                images = upload_multiple_files(files, folder=f"offers/{request_id}")
+            images = save_multiple_files(files, subfolder=f"offers/{request_id}")
         if 'voice' in request.files:
             f = request.files['voice']
-            if f and f.filename:
-                voice = upload_file_to_cloudinary(f, folder=f"offers/{request_id}", resource_type="video")
+            voice = save_file_to_local(f, subfolder=f"offers/{request_id}")
         if 'video' in request.files:
             f = request.files['video']
-            if f and f.filename:
-                video = upload_file_to_cloudinary(f, folder=f"offers/{request_id}", resource_type="video")
+            video = save_file_to_local(f, subfolder=f"offers/{request_id}")
         
         offer = Offer(request_id=request_id, artisan_id=current_user.id, message=message, images=images, voice=voice, video=video)
         db.session.add(offer)
@@ -1558,7 +1598,7 @@ def view_offers(request_id):
                 <div class="card">
                     <div class="card-body">
                         <div style="display:flex; align-items:center; margin-bottom:10px;">
-                            <img src="{{ item.artisan.profile_image or 'https://via.placeholder.com/50' }}" style="width:50px;height:50px;border-radius:50%; object-fit:cover; margin-left:10px;">
+                            <img src="{{ item.artisan.profile_image or '/static/placeholder.jpg' }}" style="width:50px;height:50px;border-radius:50%; object-fit:cover; margin-left:10px;">
                             <div>
                                 <h5><a href="/user/{{ item.artisan.id }}">{{ item.artisan.full_name or item.artisan.username }}</a></h5>
                                 <p class="text-muted">{{ item.artisan.specialty }}</p>
@@ -1701,16 +1741,13 @@ def view_chat(chat_id):
         images = voice = video = ''
         if 'images' in request.files:
             files = request.files.getlist('images')
-            if files and files[0].filename:
-                images = upload_multiple_files(files, folder=f"chats/{chat_id}")
+            images = save_multiple_files(files, subfolder=f"chats/{chat_id}")
         if 'voice' in request.files:
             f = request.files['voice']
-            if f and f.filename:
-                voice = upload_file_to_cloudinary(f, folder=f"chats/{chat_id}", resource_type="video")
+            voice = save_file_to_local(f, subfolder=f"chats/{chat_id}")
         if 'video' in request.files:
             f = request.files['video']
-            if f and f.filename:
-                video = upload_file_to_cloudinary(f, folder=f"chats/{chat_id}", resource_type="video")
+            video = save_file_to_local(f, subfolder=f"chats/{chat_id}")
         
         msg = Message(chat_id=chat_id, sender_id=current_user.id, content=content, images=images, voice=voice, video=video)
         db.session.add(msg)
@@ -1747,7 +1784,7 @@ def view_chat(chat_id):
     <div class="container mt-5" style="max-width:600px;">
         <div class="d-flex align-items-center justify-content-between mb-3">
             <div class="d-flex align-items-center">
-                <img src="{{ other.profile_image or 'https://via.placeholder.com/50' }}" style="width:50px;height:50px;border-radius:50%; object-fit:cover; margin-left:10px;">
+                <img src="{{ other.profile_image or '/static/placeholder.jpg' }}" style="width:50px;height:50px;border-radius:50%; object-fit:cover; margin-left:10px;">
                 <h4><a href="/user/{{ other.id }}">{{ other.full_name or other.username }}</a></h4>
             </div>
         </div>
@@ -1767,7 +1804,7 @@ def view_chat(chat_id):
                     {% if m.images %}
                         {% set image_list = m.images.split(',') %}
                         {% for img in image_list %}
-                            <div><a href="{{ img }}" target="_blank"><img src="{{ img }}" class="media-preview" onerror="this.onerror=null; this.src='https://via.placeholder.com/200?text=صورة+غير+متاحة';"></a></div>
+                            <div><a href="{{ img }}" target="_blank"><img src="{{ img }}" class="media-preview" onerror="this.onerror=null; this.src='/static/placeholder.jpg';"></a></div>
                         {% endfor %}
                     {% endif %}
                     {% if m.voice %}
@@ -1789,7 +1826,7 @@ def view_chat(chat_id):
                     {% if m.images %}
                         {% set image_list = m.images.split(',') %}
                         {% for img in image_list %}
-                            <div><a href="{{ img }}" target="_blank"><img src="{{ img }}" class="media-preview" onerror="this.onerror=null; this.src='https://via.placeholder.com/200?text=صورة+غير+متاحة';"></a></div>
+                            <div><a href="{{ img }}" target="_blank"><img src="{{ img }}" class="media-preview" onerror="this.onerror=null; this.src='/static/placeholder.jpg';"></a></div>
                         {% endfor %}
                     {% endif %}
                     {% if m.voice %}
@@ -1907,7 +1944,7 @@ def messages_list():
             {% for item in data %}
             <a href="/chat/{{ item.chat.id }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
                 <div class="d-flex align-items-center">
-                    <img src="{{ item.other.profile_image or 'https://via.placeholder.com/50' }}" style="width:50px;height:50px;border-radius:50%; object-fit:cover; margin-left:10px;">
+                    <img src="{{ item.other.profile_image or '/static/placeholder.jpg' }}" style="width:50px;height:50px;border-radius:50%; object-fit:cover; margin-left:10px;">
                     <div>
                         <strong>{{ item.other.full_name or item.other.username }}</strong><br>
                         <small>{% if item.last %}{{ item.last.content[:50] }}{% else %}لا توجد رسائل بعد{% endif %}</small>
@@ -2108,3 +2145,4 @@ def admin_dashboard():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
+```
