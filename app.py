@@ -1,5 +1,5 @@
 # ============================================================
-# منصة بريكولات - الجزء الأول (الإعدادات والنماذج والدوال المساعدة) - نسخة معدلة للتخزين المحلي
+# منصة بريكولات - الجزء الأول (الإعدادات والنماذج والدوال المساعدة) - نسخة تخزين محلي
 # ============================================================
 # انسخ هذا الكود في ملف app.py (الجزء الأول)
 
@@ -10,11 +10,11 @@ from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 
-# ================== إعدادات التطبيق ==================
 from flask import Flask, render_template_string, request, redirect, url_for, flash, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 
+# ================== إعدادات التطبيق ==================
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'bricolets-super-secret-key')
 
@@ -32,7 +32,7 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'mp4', 'mp3', 'wav', 'ogg', '
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
 
-# إنشاء مجلد uploads إذا لم يكن موجوداً
+# إنشاء مجلدات التخزين إذا لم تكن موجودة
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(os.path.join(UPLOAD_FOLDER, 'users'), exist_ok=True)
 os.makedirs(os.path.join(UPLOAD_FOLDER, 'requests'), exist_ok=True)
@@ -83,7 +83,7 @@ class Request(db.Model):
     description = db.Column(db.Text, nullable=False)
     specialty = db.Column(db.String(50), nullable=False)
     district = db.Column(db.String(100), nullable=False)
-    images = db.Column(db.Text, nullable=True)  # روابط مفصولة بفواصل
+    images = db.Column(db.Text, nullable=True)
     voice = db.Column(db.String(200), nullable=True)
     video = db.Column(db.String(200), nullable=True)
     client_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -155,7 +155,7 @@ with app.app_context():
                 district='مراكش - جليز',
                 age=35,
                 gender='ذكر',
-                profile_image='/static/placeholder.jpg'  # صورة افتراضية
+                profile_image='/static/placeholder.jpg'
             )
             db.session.add(admin)
             print("➕ تم إضافة مستخدم الزبون التجريبي.")
@@ -183,7 +183,7 @@ with app.app_context():
             hicham_admin = User(
                 username='hicham',
                 email='hichamcasawi709@gmail.com',
-                password=generate_password_hash('your_secure_password'),  # غيّر كلمة السر
+                password=generate_password_hash('your_secure_password'),
                 user_type='client',
                 full_name='هشام',
                 district='مراكش',
@@ -216,18 +216,14 @@ def save_file_to_local(file, subfolder=''):
         flash('نوع الملف غير مسموح به', 'danger')
         return None
     try:
-        # تأمين اسم الملف
         filename = secure_filename(file.filename)
-        # إضافة طابع زمني لتجنب التكرار
         name, ext = os.path.splitext(filename)
         timestamp = datetime.now().strftime('%Y%m%d%H%M%S%f')
         new_filename = f"{name}_{timestamp}{ext}"
-        # المسار الكامل للتخزين
         folder_path = os.path.join(app.config['UPLOAD_FOLDER'], subfolder)
         os.makedirs(folder_path, exist_ok=True)
         file_path = os.path.join(folder_path, new_filename)
         file.save(file_path)
-        # إرجاع المسار النسبي (سيتم خدمته عبر route /uploads/)
         return f'/uploads/{subfolder}/{new_filename}'
     except Exception as e:
         print(f"❌ خطأ في حفظ الملف: {e}")
@@ -328,9 +324,8 @@ app.jinja_env.globals.update(
 
 print("✅ الجزء الأول اكتمل مع تحسينات التخزين المحلي وإضافة خدمة الملفات.")
 # ============ نهاية الجزء الأول ============
-```python
 # ============================================================
-# منصة بريكولات - الجزء الثاني (المسارات وتشغيل التطبيق) - نسخة معدلة للتخزين المحلي
+# منصة بريكولات - الجزء الثاني (المسارات وتشغيل التطبيق) - نسخة تخزين محلي
 # أضف هذا الكود بعد السطر "# ============ نهاية الجزء الأول ============"
 # في نفس ملف app.py
 # ============================================================
@@ -2145,4 +2140,3 @@ def admin_dashboard():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
-```
