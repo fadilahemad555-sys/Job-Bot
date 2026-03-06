@@ -1,5 +1,5 @@
 # ============================================================
-# منصة بريكولات - الجزء الأول (الإعدادات والنماذج والدوال المساعدة)
+# منصة بريكولات - النسخة النهائية المصححة (الجزء الأول)
 # ============================================================
 
 import os
@@ -326,10 +326,10 @@ app.jinja_env.globals.update(
     dashboard_url_for=dashboard_url_for
 )
 
-print("✅ الجزء الأول اكتمل.")
-# ============ نهاية الجزء الأول ============
+print("✅ تم تحميل الجزء الأول بنجاح.")
+
 # ============================================================
-# الجزء الثاني: المسارات الأساسية (الصفحة الرئيسية، الملف الشخصي، الدردشة)
+# المسارات الأساسية (الصفحة الرئيسية، الملف الشخصي، الدردشة)
 # ============================================================
 
 @app.route('/')
@@ -785,33 +785,15 @@ def view_chat(chat_id):
         </script>
     </div></body></html>''', messages=messages, other=other, User=User)
 
-# ================== لوحات التحكم الأساسية (لتجنب خطأ BuildError) ==================
-@app.route('/client-dashboard')
-@login_required
-def client_dashboard():
-    return "لوحة تحكم الزبون (سيتم استكمالها في الجزء الثالث)"
-
-@app.route('/artisan-dashboard')
-@login_required
-def artisan_dashboard():
-    return "لوحة تحكم الحرفي (سيتم استكمالها في الجزء الثالث)"
-
-@app.route('/admin')
-@login_required
-@admin_required
-def admin_dashboard():
-    return "لوحة الإدارة (سيتم استكمالها في الجزء الثالث)"
-
+# ================== مسارات بسيطة (تسجيل خروج) ==================
 @app.route('/logout')
 @login_required
 def logout():
     logout_user()
     return redirect(url_for('index'))
 
-print("✅ الجزء الثاني اكتمل.")
-# ============ نهاية الجزء الثاني ============
-# ============================================================
-# الجزء الثالث: جميع المسارات المتبقية (الطلبات، العروض، المحادثات، التقييمات، الإدارة)
+print("✅ الجزء الأول من المسارات تم تحميله بنجاح. أضف الآن الجزء الثاني.")# ============================================================
+# الجزء الثاني: جميع المسارات المتبقية (لوحات التحكم، الطلبات، العروض، التقييمات، الإدارة)
 # ============================================================
 
 # ================== قائمة الحرفيين ==================
@@ -871,11 +853,10 @@ def search():
     <!DOCTYPE html><html dir="rtl"><head><title>الطلبات المفتوحة</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        .stats-mini{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.7);color:#fff;padding:5px 10px;border-radius:20px;font-size:12px;z-index:9999;opacity:0.6;}.stats-mini:hover{opacity:1;}
+        .stats-mini{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.7);color:#fff;padding:5px 10px;border-radius:20px;font-size:12px;z-index:9999;opacity:0.6;}
         .request-card{margin-bottom:20px;}
         .request-images{display:flex; flex-wrap:wrap; gap:5px; margin-top:10px;}
         .request-images img{width:80px;height:80px;object-fit:cover;border-radius:5px;cursor:pointer;transition:transform 0.2s;}
-        .request-images img:hover{transform:scale(1.05);}
         .client-info{display:flex;align-items:center;margin-bottom:10px;}
         .client-img{width:40px;height:40px;border-radius:50%;object-fit:cover;margin-left:10px;}
         .modal-body img{width:100%;}
@@ -950,7 +931,7 @@ def login():
     return render_template_string('''
     <!DOCTYPE html><html dir="rtl"><head><title>تسجيل الدخول</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>.stats-mini{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.7);color:#fff;padding:5px 10px;border-radius:20px;font-size:12px;z-index:9999;opacity:0.6;}.stats-mini:hover{opacity:1;}</style>
+    <style>.stats-mini{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.7);color:#fff;padding:5px 10px;border-radius:20px;font-size:12px;z-index:9999;opacity:0.6;}</style>
     </head>
     <body>
     <div class="stats-mini">👥 {{ User.query.count() }} | 🔨 {{ User.query.filter_by(user_type='artisan').count() }}</div>
@@ -1178,7 +1159,7 @@ def public_profile(user_id):
         </div></div>
         {% endif %}
         {% if user.user_type == 'artisan' and user.video_work %}
-        <div class="portfolio-section"><h3 class="portfolio-title">🎥 فيديو العمل</h3><div class="portfolio-grid"><div class="portfolio-item video-thumb" onclick="openVideo('{{ user.video_work }}')"><img src="/uploads/video_placeholder.jpg" class="portfolio-img" onerror="this.onerror=null; this.src='/uploads/placeholder.jpg';"></div></div></div>
+        <div class="portfolio-section"><h3 class="portfolio-title">🎥 فيديو العمل</h3><div class="portfolio-grid"><div class="portfolio-item video-thumb" onclick="openVideo('{{ user.video_work }}')"><img src="/uploads/placeholder.jpg" class="portfolio-img" onerror="this.onerror=null; this.src='/uploads/placeholder.jpg';"></div></div></div>
         {% endif %}
         {% if ratings %}<div class="card mt-4"><div class="card-header bg-warning">التقييمات</div><div class="card-body">{% for r in ratings %}<div class="border-bottom pb-2 mb-2"><strong>{{ r.rater.full_name or r.rater.username }}</strong> <span class="text-warning ms-2">{% for i in range(r.score|int) %}★{% endfor %}{% for i in range(5 - r.score|int) %}☆{% endfor %}</span><p class="mb-1">{{ r.comment or '' }}</p><small class="text-muted">{{ r.created_at.strftime('%Y-%m-%d') }}</small></div>{% endfor %}</div></div>{% endif %}
         <div class="modal fade" id="imageModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-body"><img src="" id="modalImage" style="width:100%;"></div></div></div></div>
@@ -1566,7 +1547,7 @@ def close_request(request_id):
         flash('غير مصرح')
     return redirect(url_for('client_dashboard'))
 
-# ================== لوحة الإدارة (كاملة) ==================
+# ================== لوحة الإدارة ==================
 @app.route('/admin')
 @login_required
 @admin_required
