@@ -16,7 +16,6 @@ from flask_login import LoginManager, UserMixin, login_user, logout_user, login_
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'bricolets-super-secret-key')
 
-# إعداد قاعدة البيانات
 database_url = os.environ.get('DATABASE_URL')
 if database_url and database_url.startswith('postgres://'):
     database_url = database_url.replace('postgres://', 'postgresql://', 1)
@@ -60,10 +59,10 @@ class User(UserMixin, db.Model):
     district = db.Column(db.String(100), nullable=True)
     age = db.Column(db.Integer, nullable=True)
     gender = db.Column(db.String(10), nullable=True)
-    profile_image = db.Column(db.String(200), nullable=True)  # مسار الصورة (يبدأ بـ /uploads/...)
+    profile_image = db.Column(db.String(200), nullable=True)
     specialty = db.Column(db.String(50), nullable=True)
     video_work = db.Column(db.String(200), nullable=True)
-    portfolio = db.Column(db.Text, nullable=True)  # روابط مفصولة بفواصل
+    portfolio = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     experience_years = db.Column(db.Integer, nullable=True)
     is_admin = db.Column(db.Boolean, default=False)
@@ -140,56 +139,21 @@ class Rating(db.Model):
 with app.app_context():
     db.create_all()
     print("✅ تم التأكد من وجود الجداول.")
-
     try:
         if not User.query.filter_by(email='admin@test.com').first():
-            admin = User(
-                username='admin',
-                email='admin@test.com',
-                password=generate_password_hash('admin123'),
-                user_type='client',
-                full_name='أحمد المري',
-                district='مراكش - جليز',
-                age=35,
-                gender='ذكر',
-                profile_image='/uploads/placeholder.jpg'
-            )
-            db.session.add(admin)
-            print("➕ تم إضافة مستخدم الزبون التجريبي.")
-
+            admin = User(username='admin', email='admin@test.com', password=generate_password_hash('admin123'),
+                         user_type='client', full_name='أحمد المري', district='مراكش - جليز',
+                         age=35, gender='ذكر', profile_image='/uploads/placeholder.jpg')
+            db.session.add(admin); print("➕ تم إضافة مستخدم الزبون التجريبي.")
         if not User.query.filter_by(email='artisan@test.com').first():
-            artisan = User(
-                username='artisan1',
-                email='artisan@test.com',
-                password=generate_password_hash('artisan123'),
-                user_type='artisan',
-                full_name='محمد السباك',
-                specialty='سباك',
-                district='مراكش - جليز',
-                age=40,
-                gender='ذكر',
-                profile_image='/uploads/placeholder.jpg',
-                video_work='',
-                portfolio='',
-                experience_years=8
-            )
-            db.session.add(artisan)
-            print("➕ تم إضافة مستخدم الحرفي التجريبي.")
-
+            artisan = User(username='artisan1', email='artisan@test.com', password=generate_password_hash('artisan123'),
+                           user_type='artisan', full_name='محمد السباك', specialty='سباك', district='مراكش - جليز',
+                           age=40, gender='ذكر', profile_image='/uploads/placeholder.jpg', experience_years=8)
+            db.session.add(artisan); print("➕ تم إضافة مستخدم الحرفي التجريبي.")
         if not User.query.filter_by(email='hichamcasawi709@gmail.com').first():
-            hicham_admin = User(
-                username='hicham',
-                email='hichamcasawi709@gmail.com',
-                password=generate_password_hash('your_secure_password'),
-                user_type='client',
-                full_name='هشام',
-                district='مراكش',
-                is_admin=True,
-                profile_image='/uploads/placeholder.jpg'
-            )
-            db.session.add(hicham_admin)
-            print("➕ تم إضافة حساب الأدمن.")
-
+            hicham_admin = User(username='hicham', email='hichamcasawi709@gmail.com', password=generate_password_hash('your_secure_password'),
+                                user_type='client', full_name='هشام', district='مراكش', is_admin=True, profile_image='/uploads/placeholder.jpg')
+            db.session.add(hicham_admin); print("➕ تم إضافة حساب الأدمن.")
         db.session.commit()
         print("👤 تم التأكد من وجود المستخدمين.")
     except Exception as e:
@@ -200,13 +164,35 @@ with app.app_context():
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+# ================== قائمة المدن المغربية (شاملة) ==================
+MOROCCAN_CITIES = [
+    "أكادير", "الدار البيضاء", "فاس", "مراكش", "مكناس", "الرباط", "طنجة",
+    "وجدة", "تطوان", "القنيطرة", "آسفي", "الجديدة", "الناظور", "تازة",
+    "بني ملال", "خريبكة", "الفقيه بن صالح", "قلعة السراغنة", "اليوسفية",
+    "الصويرة", "تارودانت", "ورزازات", "زاكورة", "الرشيدية", "إفران",
+    "الحسيمة", "شفشاون", "وزان", "تاونات", "صفرو", "بولمان", "الراشيدية",
+    "بوجدور", "الداخلة", "العيون", "السمارة", "طانطان", "كلميم", "أسا الزاك",
+    "أزيلال", "بنسليمان", "العرائش", "الحاجب", "إقليم الفحص أنجرة", "فكيك",
+    "خنيفرة", "الخميسات", "الرحامنة", "آسا الزاك", "السمارة", "صفرو",
+    "سطات", "سيدي بنور", "سيدي إفني", "سيدي قاسم", "سيدي سليمان", "تارودانت",
+    "تاونات", "تازة", "تطوان", "تينغير", "تيزنيت", "طرفاية", "وزان", "زاكورة",
+    "أوسرد", "بوجدور", "السمارة", "العيون", "الداخلة", "طانطان", "كلميم",
+    "أسا الزاك", "الرشيدية", "ورزازات", "زاكورة", "أزيلال", "بني ملال",
+    "خنيفرة", "خريبكة", "الفقيه بن صالح", "قلعة السراغنة", "اليوسفية",
+    "الرحامنة", "الحاجب", "إفران", "صفرو", "بولمان", "تاونات", "تازة",
+    "جرسيف", "شفشاون", "الفحص أنجرة", "المضيق الفنيدق", "الحسيمة",
+    "الدريوش", "الناظور", "بوعرفة", "جرادة", "فكيك", "الرشيدية", "ورزازات",
+    "تنغير", "زاكورة", "أكادير", "إنزكان أيت ملول", "تارودانت", "تزنيت",
+    "طاطا", "كلميم", "أسا الزاك", "طانطان", "السمارة", "العيون", "بوجدور",
+    "الداخلة", "أوسرد"
+]
+
 # ================== دوال مساعدة للتخزين المحلي ==================
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def save_file_to_local(file, subfolder=''):
-    """حفظ ملف محلياً في المسار المطلق وإرجاع المسار النسبي (يبدأ بـ /uploads/)"""
     if not file or not file.filename:
         return None
     if not allowed_file(file.filename):
@@ -217,13 +203,10 @@ def save_file_to_local(file, subfolder=''):
         name, ext = os.path.splitext(filename)
         timestamp = datetime.now().strftime('%Y%m%d%H%M%S%f')
         new_filename = f"{name}_{timestamp}{ext}"
-        
         folder_path = os.path.join(app.config['UPLOAD_FOLDER'], subfolder)
         os.makedirs(folder_path, exist_ok=True)
-        
         file_path = os.path.join(folder_path, new_filename)
         file.save(file_path)
-        
         return f'/uploads/{subfolder}/{new_filename}'
     except Exception as e:
         print(f"❌ خطأ في حفظ الملف: {e}")
@@ -231,7 +214,6 @@ def save_file_to_local(file, subfolder=''):
         return None
 
 def save_multiple_files(files, subfolder=''):
-    """حفظ عدة ملفات وإرجاع روابط مفصولة بفواصل"""
     urls = []
     for file in files:
         if file and file.filename:
@@ -241,7 +223,6 @@ def save_multiple_files(files, subfolder=''):
     return ','.join(urls)
 
 def delete_file(file_url):
-    """حذف ملف من الخادم (إذا كان المسار يبدأ بـ /uploads/)"""
     if not file_url or not file_url.startswith('/uploads/'):
         return
     try:
@@ -303,7 +284,6 @@ def admin_required(f):
     return decorated_function
 
 def dashboard_url_for(user):
-    """إرجاع الرابط المناسب للوحة تحكم المستخدم"""
     if user.is_authenticated:
         if is_admin_user(user):
             return url_for('admin_dashboard')
@@ -316,17 +296,15 @@ def dashboard_url_for(user):
 # ================== خدمة الملفات المرفوعة ==================
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
-    """خدمة الملفات المرفوعة"""
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-# تحديث دوال Jinja2
 app.jinja_env.globals.update(
     time_ago=time_ago,
     get_unread_messages_count=get_unread_messages_count,
     dashboard_url_for=dashboard_url_for
 )
 
-print("✅ تم تحميل الجزء الأول بنجاح.")
+print("✅ تم تحميل الجزء الأول بنجاح (إعدادات + دوال + قائمة مدن).")
 
 # ============================================================
 # المسارات الأساسية (الصفحة الرئيسية، الملف الشخصي، الدردشة)
@@ -339,138 +317,34 @@ def index():
     total_users = User.query.count()
     total_requests = Request.query.count()
     total_artisans = User.query.filter_by(user_type='artisan').count()
+    artisans = User.query.filter_by(user_type='artisan').limit(4).all()
     return render_template_string('''
-    <!DOCTYPE html>
-    <html dir="rtl">
-    <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
         <title>بريكولات - منصة الحرفيين في المغرب</title>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-        <style>
-            body{font-family:'Cairo',sans-serif;}
-            .hero{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;padding:60px 0;text-align:center;}
-            .hero-image{width:100px;height:100px;border-radius:10px;object-fit:cover;margin:10px;}
-            .navbar{background-color:#ffffff;box-shadow:0 2px 4px rgba(0,0,0,0.1);}
-            .role-btn{width:100%; margin:10px 0; padding:20px; font-size:1.2rem; text-align:right; border-radius:15px; color:white; text-decoration:none; display:flex; align-items:center;}
-            .role-icon{font-size:2rem; margin-left:15px;}
-            .btn-success.role-btn{background-color:#28a745;}
-            .btn-primary.role-btn{background-color:#007bff;}
-            .stats-mini {
-                position: fixed;
-                bottom: 10px;
-                left: 10px;
-                background: rgba(0,0,0,0.7);
-                color: white;
-                padding: 5px 10px;
-                border-radius: 20px;
-                font-size: 12px;
-                z-index: 9999;
-                opacity: 0.6;
-            }
-            .stats-mini:hover { opacity: 1; }
-        </style>
+        <style>body{font-family:'Cairo',sans-serif;}.hero{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;padding:60px 0;text-align:center;}.navbar{background-color:#fff;box-shadow:0 2px 4px rgba(0,0,0,0.1);}.role-btn{width:100%;margin:10px 0;padding:20px;font-size:1.2rem;text-align:right;border-radius:15px;color:white;text-decoration:none;display:flex;align-items:center;}.role-icon{font-size:2rem;margin-left:15px;}.btn-success.role-btn{background-color:#28a745;}.btn-primary.role-btn{background-color:#007bff;}.stats-mini{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.7);color:#fff;padding:5px 10px;border-radius:20px;font-size:12px;z-index:9999;opacity:0.6;}.stats-mini:hover{opacity:1;}</style>
     </head>
-    <body>
-        <div class="stats-mini">
-            👥 {{ total_users }} | 🔨 {{ total_artisans }}
-        </div>
-        <nav class="navbar navbar-expand-lg"><div class="container">
-            <a class="navbar-brand" href="{{ url_for('index') if not current_user.is_authenticated else dashboard_url_for(current_user) }}">بريكولات</a>
+    <body><div class="stats-mini">👥 {{ total_users }} | 🔨 {{ total_artisans }}</div>
+        <nav class="navbar navbar-expand-lg"><div class="container"><a class="navbar-brand" href="{% if current_user.is_authenticated %}{{ dashboard_url_for(current_user) }}{% else %}/{% endif %}">بريكولات</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item"><a class="nav-link" href="/artisans">الحرفيين</a></li>
-                    <li class="nav-item"><a class="nav-link" href="/search">الطلبات</a></li>
-                </ul>
-                <div class="d-flex">
-                    {% if current_user.is_authenticated %}
-                        <a href="/profile" class="btn btn-outline-primary me-2">الملف الشخصي</a>
-                        {% if current_user.is_admin %}
-                        <a href="/admin" class="btn btn-outline-danger me-2">الإدارة</a>
-                        {% endif %}
-                        <a href="/logout" class="btn btn-danger">تسجيل خروج</a>
-                    {% else %}
-                        <a href="/login" class="btn btn-primary">تسجيل الدخول</a>
-                    {% endif %}
-                </div>
-            </div>
-        </div></nav>
-
-        <div class="hero">
-            <div class="container">
-                <div class="row justify-content-center">
-                    <div class="col-md-2 col-6">
-                        <img src="https://images.unsplash.com/photo-1564013799919-ab600027ffc6?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&q=80" class="hero-image" alt="منزل">
-                        <p class="mt-2">منزل</p>
-                    </div>
-                    <div class="col-md-2 col-6">
-                        <img src="https://images.unsplash.com/photo-1504307651254-35680f356dfd?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&q=80" class="hero-image" alt="حرفي">
-                        <p class="mt-2">حرفي</p>
-                    </div>
-                </div>
-                <h1 class="display-4 mt-4">مرحباً بكم في بريكولات</h1>
-                <p class="lead">تجمع الحرفيين مع أصحاب المنازل والشركات. سجل الدخول لترى الطلبات في مدينتك، اكتب طلبك وسيتم الرد عليك من قبل الحرفيين القريبين منك فوراً. اختر الشخص المناسب من خلال صورته وصور أعماله.</p>
-                <div class="row mt-5">
-                    <div class="col-md-6">
-                        <a href="/register?type=client" class="role-btn btn-success">
-                            <span class="role-icon">🏠</span>
-                            <div class="text-right">
-                                <strong>أنا صاحب المنزل أو شركة</strong><br>
-                                <small>أبحث في مدينتي عن بلومبي، جلايجي، كهربائي، نجار، سباك، ألمنيوم، كباص...</small>
-                            </div>
-                        </a>
-                    </div>
-                    <div class="col-md-6">
-                        <a href="/register?type=artisan" class="role-btn btn-primary">
-                            <span class="role-icon">🔨</span>
-                            <div class="text-right">
-                                <strong>أنا معلم حرفي</strong><br>
-                                <small>أبحث عن بريكولات في المنازل أو عمل دائم في شركة في مدينتي</small>
-                            </div>
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="bg-light py-5">
-            <div class="container">
-                <h2 class="text-center mb-4">أفضل الحرفيين في المغرب</h2>
-                <div class="row">
-                    {% for artisan in artisans[:4] %}
-                    <div class="col-md-3 mb-3">
-                        <div class="card text-center">
-                            <img src="{{ artisan.profile_image or '/uploads/placeholder.jpg' }}" class="card-img-top" style="height:150px; object-fit:cover;">
-                            <div class="card-body">
-                                <h5><a href="/user/{{ artisan.id }}">{{ artisan.full_name or artisan.username }}</a></h5>
-                                <p class="text-muted">{{ artisan.specialty }} - {{ artisan.district or 'غير محدد' }}</p>
-                            </div>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-                <div class="text-center">
-                    <a href="/artisans" class="btn btn-outline-primary">عرض جميع الحرفيين</a>
-                </div>
-            </div>
-        </div>
-
-        <footer class="bg-dark text-white py-4">
-            <div class="container text-center">
-                <p>&copy; 2026 بريكولات - جميع الحقوق محفوظة</p>
-            </div>
-        </footer>
+                <ul class="navbar-nav me-auto"><li class="nav-item"><a class="nav-link" href="/artisans">الحرفيين</a></li><li class="nav-item"><a class="nav-link" href="/search">الطلبات</a></li></ul>
+                <div class="d-flex">{% if current_user.is_authenticated %}<a href="/profile" class="btn btn-outline-primary me-2">الملف الشخصي</a>{% if current_user.is_admin %}<a href="/admin" class="btn btn-outline-danger me-2">الإدارة</a>{% endif %}<a href="/logout" class="btn btn-danger">تسجيل خروج</a>{% else %}<a href="/login" class="btn btn-primary">تسجيل الدخول</a>{% endif %}</div>
+            </div></div></nav>
+        <div class="hero"><div class="container"><h1 class="display-4 mt-4">مرحباً بكم في بريكولات</h1><p class="lead">تجمع الحرفيين مع أصحاب المنازل والشركات. سجل الدخول لترى الطلبات في مدينتك.</p>
+            <div class="row mt-5"><div class="col-md-6"><a href="/register?type=client" class="role-btn btn-success"><span class="role-icon">🏠</span><div><strong>أنا صاحب المنزل أو شركة</strong><br><small>أبحث عن بلومبي، جلايجي، كهربائي...</small></div></a></div>
+            <div class="col-md-6"><a href="/register?type=artisan" class="role-btn btn-primary"><span class="role-icon">🔨</span><div><strong>أنا معلم حرفي</strong><br><small>أبحث عن بريكولات في المنازل...</small></div></a></div></div></div></div>
+        <div class="bg-light py-5"><div class="container"><h2 class="text-center mb-4">أفضل الحرفيين في المغرب</h2><div class="row">{% for artisan in artisans %}<div class="col-md-3 mb-3"><div class="card text-center"><img src="{{ artisan.profile_image or '/uploads/placeholder.jpg' }}" class="card-img-top" style="height:150px;object-fit:cover;"><div class="card-body"><h5><a href="/user/{{ artisan.id }}">{{ artisan.full_name or artisan.username }}</a></h5><p class="text-muted">{{ artisan.specialty }} - {{ artisan.district or 'غير محدد' }}</p></div></div></div>{% endfor %}</div><div class="text-center"><a href="/artisans" class="btn btn-outline-primary">عرض جميع الحرفيين</a></div></div></div>
+        <footer class="bg-dark text-white py-4"><div class="container text-center"><p>&copy; 2026 بريكولات</p></div></footer>
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    </body>
-    </html>
-    ''', total_users=total_users, total_requests=total_requests, total_artisans=total_artisans,
-    artisans=User.query.filter_by(user_type='artisan').limit(4).all())
+    </body></html>''', total_users=total_users, total_requests=total_requests, total_artisans=total_artisans, artisans=artisans)
 
-# ================== ملف شخصي (مُحسّن) ==================
+# ================== ملف شخصي (مع إصلاح حذف الصورة) ==================
 @app.route('/profile', methods=['GET','POST'])
 @login_required
 def profile():
     if request.method == 'POST':
-        # حالة رفع صورة فقط
+        # رفع صورة فقط
         if 'profile_image' in request.files and len(request.form) == 0:
             file = request.files['profile_image']
             if file and file.filename:
@@ -497,7 +371,7 @@ def profile():
                 if url:
                     current_user.profile_image = url
 
-        # معالجة بيانات الحرفي
+        # بيانات الحرفي
         if current_user.user_type == 'artisan':
             current_user.specialty = request.form.get('specialty', current_user.specialty)
             exp = request.form.get('experience_years', '').strip()
@@ -522,6 +396,7 @@ def profile():
                         all_urls = old + urls.split(',')
                         current_user.portfolio = ','.join(all_urls)
 
+            # حذف صورة من الأعمال (مُحسّن)
             if 'delete_image' in request.form:
                 img_to_delete = request.form['delete_image']
                 if current_user.portfolio:
@@ -531,6 +406,12 @@ def profile():
                         if img_to_delete.startswith('/uploads/'):
                             delete_file(img_to_delete)
                         current_user.portfolio = ','.join(urls) if urls else None
+                        db.session.commit()
+                        flash('تم حذف الصورة بنجاح', 'success')
+                    else:
+                        flash('الصورة غير موجودة', 'danger')
+                else:
+                    flash('لا يوجد صور لحذفها', 'danger')
 
         db.session.commit()
         flash('تم تحديث الملف الشخصي')
@@ -547,48 +428,27 @@ def profile():
     return render_template_string('''
     <!DOCTYPE html><html dir="rtl"><head><title>الملف الشخصي</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        .stats-mini{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.7);color:#fff;padding:5px 10px;border-radius:20px;font-size:12px;z-index:9999;opacity:0.6;}
-        .profile-header{background:#fff;border-radius:15px;padding:20px;box-shadow:0 2px 10px rgba(0,0,0,0.1);margin-bottom:20px;text-align:center;}
-        .profile-img{width:120px;height:120px;border-radius:50%;object-fit:cover;border:3px solid #007bff;}
-        .rating-stars{color:#ffc107;font-size:1.2rem;}
-        .portfolio-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:15px;}
-        .portfolio-item{position:relative;border-radius:10px;overflow:hidden;box-shadow:0 2px 5px rgba(0,0,0,0.1);}
-        .portfolio-img{width:100%;height:150px;object-fit:cover;}
-        .delete-btn{position:absolute;top:5px;right:5px;background:rgba(255,0,0,0.7);color:white;border:none;border-radius:50%;width:30px;height:30px;cursor:pointer;}
-        .image-action-btn{margin:5px;}
-    </style></head>
-    <body>
-    <div class="stats-mini">👥 {{ User.query.count() }} | 🔨 {{ User.query.filter_by(user_type='artisan').count() }}</div>
+    <style>.stats-mini{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.7);color:#fff;padding:5px 10px;border-radius:20px;font-size:12px;z-index:9999;opacity:0.6;}.profile-header{background:#fff;border-radius:15px;padding:20px;box-shadow:0 2px 10px rgba(0,0,0,0.1);margin-bottom:20px;text-align:center;}.profile-img{width:120px;height:120px;border-radius:50%;object-fit:cover;border:3px solid #007bff;}.portfolio-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:15px;}.portfolio-item{position:relative;border-radius:10px;overflow:hidden;}.delete-btn{position:absolute;top:5px;right:5px;background:rgba(255,0,0,0.7);color:white;border:none;border-radius:50%;width:30px;height:30px;cursor:pointer;}</style></head>
+    <body><div class="stats-mini">👥 {{ User.query.count() }} | 🔨 {{ User.query.filter_by(user_type='artisan').count() }}</div>
     <div class="container mt-5" style="max-width:800px;">
         <div class="profile-header">
             <img src="{{ current_user.profile_image or '/uploads/placeholder.jpg' }}" class="profile-img mb-3">
-            <div>
-                {% if current_user.profile_image %}
-                <form method="POST" enctype="multipart/form-data" style="display:inline;" id="changePhotoForm">
-                    <input type="file" name="profile_image" id="profile_image" accept="image/*" style="display:none;" onchange="document.getElementById('changePhotoForm').submit();">
-                    <button type="button" class="btn btn-sm btn-outline-primary image-action-btn" onclick="document.getElementById('profile_image').click();">تغيير الصورة</button>
-                </form>
-                {% else %}
-                <form method="POST" enctype="multipart/form-data" style="display:inline;" id="addPhotoForm">
-                    <input type="file" name="profile_image" id="profile_image_add" accept="image/*" style="display:none;" onchange="document.getElementById('addPhotoForm').submit();">
-                    <button type="button" class="btn btn-sm btn-success image-action-btn" onclick="document.getElementById('profile_image_add').click();">إضافة صورة</button>
-                </form>
-                {% endif %}
-            </div>
-            <h2 class="mt-2">{{ current_user.full_name or current_user.username }}</h2>
-            <p class="text-muted">{{ current_user.district or 'غير محدد' }}</p>
-            {% if current_user.user_type == 'artisan' %}
-                <p class="text-muted">{{ current_user.specialty }} {% if current_user.experience_years %} - خبرة {{ current_user.experience_years }} سنة{% endif %}</p>
-                {% if num_ratings > 0 %}<div class="rating-stars">{% for i in range(5) %}{% if i < avg_rating|int %}★{% else %}☆{% endif %}{% endfor %} ({{ num_ratings }})</div>{% endif %}
-            {% endif %}
+            <div>{% if current_user.profile_image %}<form method="POST" enctype="multipart/form-data" style="display:inline;" id="changePhotoForm"><input type="file" name="profile_image" id="profile_image" accept="image/*" style="display:none;" onchange="document.getElementById('changePhotoForm').submit();"><button type="button" class="btn btn-sm btn-outline-primary" onclick="document.getElementById('profile_image').click();">تغيير الصورة</button></form>{% else %}<form method="POST" enctype="multipart/form-data" style="display:inline;" id="addPhotoForm"><input type="file" name="profile_image" id="profile_image_add" accept="image/*" style="display:none;" onchange="document.getElementById('addPhotoForm').submit();"><button type="button" class="btn btn-sm btn-success" onclick="document.getElementById('profile_image_add').click();">إضافة صورة</button></form>{% endif %}</div>
+            <h2 class="mt-2">{{ current_user.full_name or current_user.username }}</h2><p class="text-muted">{{ current_user.district or 'غير محدد' }}</p>
+            {% if current_user.user_type == 'artisan' %}<p class="text-muted">{{ current_user.specialty }} {% if current_user.experience_years %} - خبرة {{ current_user.experience_years }} سنة{% endif %}</p>{% endif %}
             <p class="joined">انضم {{ time_ago(current_user.created_at) }}</p>
         </div>
-
         <button class="btn btn-primary mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#editForm">تعديل البيانات</button>
         <div class="collapse" id="editForm"><div class="card card-body"><form method="POST" enctype="multipart/form-data">
             <div class="mb-3"><label>الاسم الكامل</label><input type="text" name="full_name" value="{{ current_user.full_name }}" class="form-control" required></div>
-            <div class="mb-3"><label>مدينتك الحالية</label><input type="text" name="district" value="{{ current_user.district }}" class="form-control" required></div>
+            <div class="mb-3"><label>مدينتك الحالية</label>
+                <select name="district" class="form-select" required>
+                    <option value="">اختر مدينتك</option>
+                    {% for city in MOROCCAN_CITIES %}
+                    <option value="{{ city }}" {% if current_user.district == city %}selected{% endif %}>{{ city }}</option>
+                    {% endfor %}
+                </select>
+            </div>
             {% if current_user.user_type == 'artisan' %}
             <div class="mb-3"><label>التخصص</label><select name="specialty" class="form-select">{% for val in ['بلومبي','نجار','سباك','كهربائي','رسام','حدائق','جباص','المنيوم','جلايجي','كباص'] %}<option value="{{ val }}" {% if current_user.specialty == val %}selected{% endif %}>{{ val }}</option>{% endfor %}</select></div>
             <div class="mb-3"><label>سنوات الخبرة</label><input type="number" name="experience_years" class="form-control" value="{{ current_user.experience_years or '' }}"></div>
@@ -597,29 +457,26 @@ def profile():
             {% endif %}
             <button type="submit" class="btn btn-primary">حفظ</button>
         </form></div></div>
-
         {% if current_user.user_type == 'artisan' and portfolio_list %}
         <div class="portfolio-section"><h3 class="mb-3">📸 أعمالي</h3><div class="portfolio-grid">
             {% for img in portfolio_list %}
             <div class="portfolio-item">
-                <img src="{{ img }}" class="portfolio-img" onclick="openModal('{{ img }}')">
+                <img src="{{ img }}" class="portfolio-img" style="width:100%;height:150px;object-fit:cover;" onclick="openModal('{{ img }}')">
                 <form method="POST" style="display:inline;" onsubmit="return confirm('هل أنت متأكد من حذف هذه الصورة؟');">
                     <input type="hidden" name="delete_image" value="{{ img }}">
                     <button type="submit" class="delete-btn" title="حذف">×</button>
                 </form>
             </div>
             {% endfor %}
-        </div></div>
-        {% endif %}
-
+        </div></div>{% endif %}
         <a href="/" class="btn btn-secondary mt-3">الرئيسية</a>
     </div>
     <div class="modal fade" id="imageModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-body"><img src="" id="modalImage" style="width:100%;"></div></div></div></div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>function openModal(src){ document.getElementById('modalImage').src = src; new bootstrap.Modal(document.getElementById('imageModal')).show(); }</script>
-    </body></html>''', current_user=current_user, avg_rating=avg_rating, num_ratings=num_ratings, portfolio_list=portfolio_list, User=User)
+    </body></html>''', current_user=current_user, avg_rating=avg_rating, num_ratings=num_ratings, portfolio_list=portfolio_list, User=User, MOROCCAN_CITIES=MOROCCAN_CITIES)
 
-# ================== الدردشة مع زر الموقع الذكي ==================
+# ================== الدردشة مع زر الموقع الذكي وحذف الرسائل ==================
 @app.route('/chat/<int:chat_id>', methods=['GET','POST'])
 @login_required
 def view_chat(chat_id):
@@ -662,11 +519,13 @@ def view_chat(chat_id):
     <style>
         .stats-mini{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.7);color:#fff;padding:5px 10px;border-radius:20px;font-size:12px;z-index:9999;opacity:0.6;}
         .message-container{height:400px;overflow-y:scroll;border:1px solid #ddd;padding:10px;background:#f9f9f9;margin-bottom:10px;}
-        .my-message{background-color:#007bff;color:white;margin-left:auto;padding:8px 12px;border-radius:15px;max-width:70%;margin-bottom:5px;}
-        .other-message{background-color:#e9ecef;color:black;padding:8px 12px;border-radius:15px;max-width:70%;margin-bottom:5px;}
+        .my-message{background-color:#007bff;color:white;margin-left:auto;padding:8px 12px;border-radius:15px;max-width:70%;margin-bottom:5px;position:relative;}
+        .other-message{background-color:#e9ecef;color:black;padding:8px 12px;border-radius:15px;max-width:70%;margin-bottom:5px;position:relative;}
         .action-btn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:#f0f0f0;color:#333;text-decoration:none;margin-left:5px;cursor:pointer;border:none;}
         .action-btn:hover{background:#ddd;}
         .media-preview{max-width:100%;max-height:200px;margin-top:5px;border-radius:5px;}
+        .delete-msg-btn{position:absolute;top:-5px;right:-5px;background:rgba(255,0,0,0.8);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:12px;line-height:20px;text-align:center;cursor:pointer;display:none;}
+        .my-message:hover .delete-msg-btn, .other-message:hover .delete-msg-btn{display:block;}
     </style></head>
     <body>
     <div class="stats-mini">👥 {{ User.query.count() }} | 🔨 {{ User.query.filter_by(user_type='artisan').count() }}</div>
@@ -682,7 +541,7 @@ def view_chat(chat_id):
                 {% if m.is_blocked %}
                 <div class="blocked-message">[هذه الرسالة محظورة]</div>
                 {% elif m.sender_id == current_user.id %}
-                <div class="my-message">
+                <div class="my-message" id="msg-{{ m.id }}">
                     <div class="message-content">
                         {% if m.content and m.content.startswith('https://www.google.com/maps?q=') %}
                             <a href="{{ m.content }}" target="_blank">📍 موقع على الخريطة</a>
@@ -693,6 +552,9 @@ def view_chat(chat_id):
                     {% if m.images %}{% for img in m.images.split(',') %}<div><a href="{{ img }}" target="_blank"><img src="{{ img }}" class="media-preview"></a></div>{% endfor %}{% endif %}
                     {% if m.voice %}<audio controls src="{{ m.voice }}" style="width:100%;"></audio>{% endif %}
                     {% if m.video %}<video controls src="{{ m.video }}" style="max-width:100%;max-height:200px;"></video>{% endif %}
+                    <form method="POST" action="{{ url_for('delete_message', message_id=m.id) }}" style="display:inline;" onsubmit="return confirm('حذف الرسالة؟');">
+                        <button type="submit" class="delete-msg-btn" title="حذف">×</button>
+                    </form>
                 </div>
                 {% else %}
                 <div class="other-message">
@@ -718,33 +580,76 @@ def view_chat(chat_id):
                 <label for="images" class="action-btn">🖼️</label><input type="file" name="images" id="images" accept="image/*" multiple style="display: none;">
                 <label for="video" class="action-btn">◀️</label><input type="file" name="video" id="video" accept="video/*" style="display: none;">
                 <label for="voice" class="action-btn">🔊</label><input type="file" name="voice" id="voice" accept="audio/*" style="display: none;">
-                <button type="button" class="action-btn" id="smartLocationBtn" title="مشاركة موقعي">📍</button>
+                <button type="button" class="action-btn" id="locationBtn">🔵</button>
             </div>
-            <div id="locationResultArea" style="display: none; margin-bottom: 10px;" class="p-2 border rounded">
-                <p class="mb-1">📍 رابط موقعك (يمكنك نسخه):</p>
-                <div class="input-group">
-                    <input type="text" id="locationUrl" class="form-control" readonly value="">
-                    <button class="btn btn-outline-primary" type="button" id="copyLocationBtn">📋 نسخ</button>
-                    <button class="btn btn-outline-success" type="button" id="useLocationBtn">➕ إضافة للرسالة</button>
+
+            <div id="locationArea" style="display: none; margin-top: 10px;" class="p-3 border rounded bg-light">
+                <p class="fw-bold mb-2">📍 شارك موقعك باستخدام Plus Code:</p>
+                <ol class="mb-2">
+                    <li>اضغط على الرابط أدناه لفتح الخريطة على موقعك الحالي.</li>
+                    <li>في الخريطة، انظر أسفل الشاشة ستجد رمزاً مثل <strong>M255+F8V مراكش</strong>.</li>
+                    <li>انسخ هذا الرمز (اضغط عليه مطولاً واختر "نسخ").</li>
+                    <li>عُد إلى هنا، الصق الرمز في الحقل أدناه واضغط على "إضافة للرسالة".</li>
+                </ol>
+                <a href="#" id="mapLink" target="_blank" class="btn btn-outline-primary w-100 mb-2">🗺️ افتح الخريطة الآن</a>
+                <div class="input-group mb-2">
+                    <span class="input-group-text">📍 Plus Code</span>
+                    <input type="text" class="form-control" id="plusCodeInput" placeholder="الصق الرمز هنا">
+                    <button class="btn btn-success" type="button" id="addCodeBtn">إضافة للرسالة</button>
                 </div>
-                <small class="text-muted">يمكنك نسخ الرابط أو إضافته مباشرة للرسالة.</small>
+                <div class="d-flex align-items-center gap-2">
+                    <input type="text" class="form-control" id="locationUrl" readonly value="">
+                    <button class="btn btn-outline-secondary" type="button" id="copyUrlBtn">📋 نسخ</button>
+                </div>
+                <small class="text-muted d-block mt-2">يمكنك أيضاً إرسال الرابط المباشر.</small>
             </div>
         </form>
+
+        <div class="progress-bar" id="uploadProgress"><div class="progress-bar-fill" id="progressFill"></div></div>
+        <div class="loading-text" id="loadingText">جاري رفع الملف...</div>
 
         <script>
         var container = document.getElementById('messageContainer');
         container.scrollTop = container.scrollHeight;
 
-        document.getElementById('smartLocationBtn').addEventListener('click', function() {
+        function showProgress() {
+            var pb = document.getElementById('uploadProgress');
+            var pf = document.getElementById('progressFill');
+            var lt = document.getElementById('loadingText');
+            if (pb && pf && lt) {
+                pb.style.display = 'block';
+                lt.style.display = 'block';
+                pf.style.width = '0%';
+                var width = 0;
+                var interval = setInterval(function() {
+                    if (width >= 90) clearInterval(interval);
+                    else { width += 10; pf.style.width = width + '%'; }
+                }, 300);
+                setTimeout(function() { clearInterval(interval); pf.style.width = '100%'; }, 2000);
+            }
+        }
+
+        document.getElementById('images').addEventListener('change', function() {
+            if(this.files.length > 0) { showProgress(); document.getElementById('chatForm').submit(); }
+        });
+        document.getElementById('video').addEventListener('change', function() {
+            if(this.files.length > 0) { showProgress(); document.getElementById('chatForm').submit(); }
+        });
+        document.getElementById('voice').addEventListener('change', function() {
+            if(this.files.length > 0) { showProgress(); document.getElementById('chatForm').submit(); }
+        });
+
+        document.getElementById('locationBtn').addEventListener('click', function() {
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(
                     function(position) {
                         const lat = position.coords.latitude;
                         const lng = position.coords.longitude;
                         const mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
-                        document.getElementById('locationUrl').value = mapsUrl;
-                        document.getElementById('locationResultArea').style.display = 'block';
                         window.open(mapsUrl, '_blank');
+                        document.getElementById('locationUrl').value = mapsUrl;
+                        document.getElementById('mapLink').href = mapsUrl;
+                        document.getElementById('locationArea').style.display = 'block';
                     },
                     function(error) {
                         let msg = 'تعذر الحصول على موقعك. ';
@@ -753,18 +658,36 @@ def view_chat(chat_id):
                         else if (error.code === 3) msg += 'انتهت المهلة.';
                         else msg += error.message;
                         alert(msg);
-                        document.getElementById('locationUrl').value = 'https://maps.google.com';
-                        document.getElementById('locationResultArea').style.display = 'block';
+                        const defaultUrl = 'https://www.google.com/maps?q=31.7917,-7.0926';
+                        document.getElementById('locationUrl').value = defaultUrl;
+                        document.getElementById('mapLink').href = defaultUrl;
+                        document.getElementById('locationArea').style.display = 'block';
+                        window.open(defaultUrl, '_blank');
                     }
                 );
             } else {
                 alert('المتصفح لا يدعم خدمة الموقع.');
-                document.getElementById('locationUrl').value = 'https://maps.google.com';
-                document.getElementById('locationResultArea').style.display = 'block';
+                const defaultUrl = 'https://www.google.com/maps?q=31.7917,-7.0926';
+                document.getElementById('locationUrl').value = defaultUrl;
+                document.getElementById('mapLink').href = defaultUrl;
+                document.getElementById('locationArea').style.display = 'block';
+                window.open(defaultUrl, '_blank');
             }
         });
 
-        document.getElementById('copyLocationBtn').addEventListener('click', function() {
+        document.getElementById('addCodeBtn').addEventListener('click', function() {
+            const code = document.getElementById('plusCodeInput').value.trim();
+            if (code) {
+                const msgField = document.getElementById('messageText');
+                msgField.value += (msgField.value ? '\\n' : '') + code;
+                document.getElementById('plusCodeInput').value = '';
+                document.getElementById('locationArea').style.display = 'none';
+            } else {
+                alert('الرجاء لصق الرمز أولاً.');
+            }
+        });
+
+        document.getElementById('copyUrlBtn').addEventListener('click', function() {
             const urlInput = document.getElementById('locationUrl');
             urlInput.select();
             navigator.clipboard.writeText(urlInput.value).then(() => {
@@ -773,27 +696,13 @@ def view_chat(chat_id):
                 alert('اضغط Ctrl+C لنسخ الرابط');
             });
         });
-
-        document.getElementById('useLocationBtn').addEventListener('click', function() {
-            const url = document.getElementById('locationUrl').value;
-            if (url) {
-                const msgField = document.getElementById('messageText');
-                msgField.value += (msgField.value ? '\\n' : '') + url;
-                document.getElementById('locationResultArea').style.display = 'none';
-            }
-        });
         </script>
     </div></body></html>''', messages=messages, other=other, User=User)
 
-# ================== مسارات بسيطة (تسجيل خروج) ==================
-@app.route('/logout')
-@login_required
-def logout():
-    logout_user()
-    return redirect(url_for('index'))
-
-print("✅ الجزء الأول من المسارات تم تحميله بنجاح. أضف الآن الجزء الثاني.")# ============================================================
-# الجزء الثاني: جميع المسارات المتبقية (لوحات التحكم، الطلبات، العروض، التقييمات، الإدارة)
+print("✅ الجزء الأول من المسارات (الصفحة الرئيسية، الملف الشخصي، الدردشة) تم تحميله.")
+# ============ نهاية الجزء الأول ============
+# ============================================================
+# الجزء الثاني: جميع المسارات المتبقية (مع تعديل حقول المدينة)
 # ============================================================
 
 # ================== قائمة الحرفيين ==================
@@ -856,7 +765,7 @@ def search():
         .stats-mini{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.7);color:#fff;padding:5px 10px;border-radius:20px;font-size:12px;z-index:9999;opacity:0.6;}
         .request-card{margin-bottom:20px;}
         .request-images{display:flex; flex-wrap:wrap; gap:5px; margin-top:10px;}
-        .request-images img{width:80px;height:80px;object-fit:cover;border-radius:5px;cursor:pointer;transition:transform 0.2s;}
+        .request-images img{width:80px;height:80px;object-fit:cover;border-radius:5px;cursor:pointer;}
         .client-info{display:flex;align-items:center;margin-bottom:10px;}
         .client-img{width:40px;height:40px;border-radius:50%;object-fit:cover;margin-left:10px;}
         .modal-body img{width:100%;}
@@ -1035,7 +944,7 @@ def complete_profile():
         if not full_name or not district:
             flash('يرجى ملء الاسم الكامل ومدينتك الحالية')
             return redirect(url_for('complete_profile'))
-        district = normalize_city(district)
+        district = normalize_city(district)  # not strictly needed if using select, but keep
         current_user.full_name = full_name
         current_user.district = district
         if 'profile_image' in request.files:
@@ -1081,7 +990,14 @@ def complete_profile():
         <form method="POST" enctype="multipart/form-data">
             <div class="mb-3"><label>الصورة الشخصية (اختياري)</label><input type="file" name="profile_image" class="form-control" accept="image/*"></div>
             <div class="mb-3"><label>الاسم الكامل</label><input type="text" name="full_name" class="form-control" required></div>
-            <div class="mb-3"><label>مدينتك الحالية</label><input type="text" name="district" class="form-control" placeholder="مثال: مراكش" required></div>
+            <div class="mb-3"><label>مدينتك الحالية</label>
+                <select name="district" class="form-select" required>
+                    <option value="">اختر مدينتك</option>
+                    {% for city in MOROCCAN_CITIES %}
+                    <option value="{{ city }}">{{ city }}</option>
+                    {% endfor %}
+                </select>
+            </div>
             <div id="artisan-fields" style="display:none;">
                 <div class="mb-3"><label>تخصصك</label>
                     <select name="specialty" class="form-select">
@@ -1105,7 +1021,7 @@ def complete_profile():
             <button type="submit" class="btn btn-primary w-100">تم</button>
         </form>
     </div></body></html>
-    ''', User=User)
+    ''', User=User, MOROCCAN_CITIES=MOROCCAN_CITIES)
 
 # ================== الملف الشخصي العام ==================
 @app.route('/user/<int:user_id>')
@@ -1169,7 +1085,7 @@ def public_profile(user_id):
     <script>function openModal(src){ document.getElementById('modalImage').src = src; new bootstrap.Modal(document.getElementById('imageModal')).show(); } function openVideo(src){ window.open(src, '_blank'); }</script>
     </body></html>''', user=user, avg_rating=avg_rating, num_ratings=num_ratings, ratings=ratings, portfolio_list=portfolio_list, User=User)
 
-# ================== لوحة تحكم الزبون (كاملة) ==================
+# ================== لوحة تحكم الزبون ==================
 @app.route('/client-dashboard')
 @login_required
 def client_dashboard():
@@ -1314,12 +1230,19 @@ def post_request():
             <div class="mb-3"><label class="form-label">عنوان الطلب (اختياري)</label><input type="text" name="title" class="form-control" placeholder="مثال: تصليح تسريب ماء" value="طلب خدمة"></div>
             <div class="mb-3"><label class="form-label">اكتب مشكلتك هنا</label><textarea name="description" class="form-control" rows="4" placeholder="مثال: الصابون كيخرج من تحت المغسلة..." required></textarea></div>
             <div class="mb-3"><label class="form-label">التخصص الذي تحتاجه</label><select name="specialty" class="form-select" required><option value="">اختر التخصص</option><option value="بلومبي">بلومبي</option><option value="نجار">نجار</option><option value="سباك">سباك</option><option value="كهربائي">كهربائي</option><option value="رسام">رسام</option><option value="حدائق">حدائق</option><option value="جباص">جباص</option><option value="المنيوم">المنيوم</option><option value="جلايجي">جلايجي</option><option value="كباص">كباص</option></select></div>
-            <div class="mb-3"><label class="form-label">المدينة أو الحي</label><input type="text" name="district" class="form-control" placeholder="مثال: مراكش - جليز" required></div>
+            <div class="mb-3"><label class="form-label">المدينة أو الحي</label>
+                <select name="district" class="form-select" required>
+                    <option value="">اختر مدينتك</option>
+                    {% for city in MOROCCAN_CITIES %}
+                    <option value="{{ city }}">{{ city }}</option>
+                    {% endfor %}
+                </select>
+            </div>
             <div class="mb-3"><label class="form-label">صور المشكلة (اختياري)</label><input type="file" name="images" class="form-control" accept="image/*" multiple><small class="text-muted">يمكنك اختيار عدة صور</small></div>
             <button type="submit" class="btn btn-primary w-100">تم النشر</button>
         </form>
         <a href="/" class="btn btn-secondary w-100 mt-2">الرئيسية</a>
-    </div></body></html>''', User=User)
+    </div></body></html>''', User=User, MOROCCAN_CITIES=MOROCCAN_CITIES)
 
 # ================== تقديم عرض ==================
 @app.route('/send-offer/<int:request_id>', methods=['GET','POST'])
@@ -1496,6 +1419,27 @@ def start_chat(request_id, artisan_id):
         db.session.add(chat)
         db.session.commit()
     return redirect(url_for('view_chat', chat_id=chat.id))
+
+# ================== حذف رسالة (مضافة) ==================
+@app.route('/delete-message/<int:message_id>', methods=['POST'])
+@login_required
+def delete_message(message_id):
+    msg = Message.query.get_or_404(message_id)
+    if msg.sender_id != current_user.id and not is_admin_user(current_user):
+        flash('غير مصرح بحذف هذه الرسالة', 'danger')
+        return redirect(url_for('view_chat', chat_id=msg.chat_id))
+    chat_id = msg.chat_id
+    if msg.images:
+        for img in msg.images.split(','):
+            delete_file(img)
+    if msg.voice:
+        delete_file(msg.voice)
+    if msg.video:
+        delete_file(msg.video)
+    db.session.delete(msg)
+    db.session.commit()
+    flash('تم حذف الرسالة', 'success')
+    return redirect(url_for('view_chat', chat_id=chat_id))
 
 # ================== قائمة المحادثات ==================
 @app.route('/messages')
