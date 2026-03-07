@@ -1,5 +1,6 @@
 # ============================================================
 # منصة بريكولات - النسخة النهائية (الجزء الأول)
+# مع تحديث كلمة سر الأدمن
 # ============================================================
 
 import os
@@ -142,6 +143,28 @@ with app.app_context():
     print("✅ تم التأكد من وجود الجداول.")
 
     try:
+        # تحديث كلمة سر الأدمن أولاً (إذا كان موجوداً)
+        admin_user = User.query.filter_by(email='hichamcasawi709@gmail.com').first()
+        if admin_user:
+            # تحديث كلمة السر إلى القيمة المطلوبة
+            admin_user.password = generate_password_hash('hi555657585959')
+            print("🔄 تم تحديث كلمة سر حساب الأدمن.")
+        else:
+            # إنشاء حساب الأدمن إذا لم يكن موجوداً
+            admin_user = User(
+                username='hicham',
+                email='hichamcasawi709@gmail.com',
+                password=generate_password_hash('hi555657585959'),
+                user_type='client',
+                full_name='هشام',
+                district='مراكش',
+                is_admin=True,
+                profile_image='/uploads/placeholder.jpg'
+            )
+            db.session.add(admin_user)
+            print("➕ تم إضافة حساب الأدمن.")
+
+        # إضافة المستخدمين التجريبيين الآخرين إذا لم يكونوا موجودين
         if not User.query.filter_by(email='admin@test.com').first():
             admin = User(
                 username='admin',
@@ -175,20 +198,6 @@ with app.app_context():
             )
             db.session.add(artisan)
             print("➕ تم إضافة مستخدم الحرفي التجريبي.")
-
-        if not User.query.filter_by(email='hichamcasawi709@gmail.com').first():
-            hicham_admin = User(
-                username='hicham',
-                email='hichamcasawi709@gmail.com',
-                password=generate_password_hash('hi555657585959'),  # تم تحديث كلمة السر
-                user_type='client',
-                full_name='هشام',
-                district='مراكش',
-                is_admin=True,
-                profile_image='/uploads/placeholder.jpg'
-            )
-            db.session.add(hicham_admin)
-            print("➕ تم إضافة حساب الأدمن.")
 
         db.session.commit()
         print("👤 تم التأكد من وجود المستخدمين.")
@@ -694,9 +703,9 @@ def view_chat(chat_id):
             <div class="mb-2"><textarea name="message" class="form-control" placeholder="اكتب رسالتك..." rows="2" id="messageText"></textarea></div>
             <div class="d-flex align-items-center gap-2 mb-2">
                 <button type="submit" class="btn btn-primary flex-grow-1">💬 إرسال</button>
-                <label for="images" class="action-btn">🖼️</label><input type="file" name="images" id="images" accept="image/*" multiple style="display: none;">
-                <label for="video" class="action-btn">◀️</label><input type="file" name="video" id="video" accept="video/*" style="display: none;">
-                <label for="voice" class="action-btn">🔊</label><input type="file" name="voice" id="voice" accept="audio/*" style="display: none;">
+                <label for="images" class="action-btn">🖼️</label><input type="file" name="images" id="images" accept="image/*" multiple style="display: none;" onchange="document.getElementById('chatForm').submit();">
+                <label for="video" class="action-btn">◀️</label><input type="file" name="video" id="video" accept="video/*" style="display: none;" onchange="document.getElementById('chatForm').submit();">
+                <label for="voice" class="action-btn">🔊</label><input type="file" name="voice" id="voice" accept="audio/*" style="display: none;" onchange="document.getElementById('chatForm').submit();">
                 <button type="button" class="action-btn" id="smartLocationBtn" title="مشاركة موقعي">📍</button>
             </div>
             <!-- منطقة لصق رابط الموقع (تظهر عند الضغط على زر الموقع) -->
@@ -789,7 +798,7 @@ def logout():
 
 print("✅ الجزء الأول من المسارات (الرئيسية، الملف الشخصي، الدردشة) تم تحميله بنجاح.")
 print("✅ أضف الآن الجزء الثاني (باقي المسارات) لإكمال الموقع.")# ============================================================
-# الجزء الثاني: جميع المسارات المتبقية مع تحسينات المدينة
+# الجزء الثاني: جميع المسارات المتبقية مع تحسينات رفع الملفات في الدردشة
 # ============================================================
 
 # ================== قائمة الحرفيين ==================
