@@ -180,7 +180,7 @@ with app.app_context():
             hicham_admin = User(
                 username='hicham',
                 email='hichamcasawi709@gmail.com',
-                password=generate_password_hash('your_secure_password'),
+                password=generate_password_hash('hi555657585959'),  # تم تحديث كلمة السر
                 user_type='client',
                 full_name='هشام',
                 district='مراكش',
@@ -208,6 +208,7 @@ def allowed_file(filename):
 def save_file_to_local(file, subfolder=''):
     """حفظ ملف محلياً في المسار المطلق وإرجاع المسار النسبي (يبدأ بـ /uploads/)"""
     if not file or not file.filename:
+        print("⚠️ الملف فارغ أو غير موجود")
         return None
     if not allowed_file(file.filename):
         flash('نوع الملف غير مسموح به', 'danger')
@@ -223,6 +224,7 @@ def save_file_to_local(file, subfolder=''):
         
         file_path = os.path.join(folder_path, new_filename)
         file.save(file_path)
+        print(f"✅ تم حفظ الملف: {file_path}")
         
         return f'/uploads/{subfolder}/{new_filename}'
     except Exception as e:
@@ -587,7 +589,7 @@ def profile():
     <script>function openModal(src){ document.getElementById('modalImage').src = src; new bootstrap.Modal(document.getElementById('imageModal')).show(); }</script>
     </body></html>''', current_user=current_user, avg_rating=avg_rating, num_ratings=num_ratings, portfolio_list=portfolio_list, User=User)
 
-# ================== الدردشة مع زر الموقع الذكي وصورة تعليمية ==================
+# ================== الدردشة مع إصلاح مشكلة رفع الملفات ==================
 @app.route('/chat/<int:chat_id>', methods=['GET','POST'])
 @login_required
 def view_chat(chat_id):
@@ -603,15 +605,24 @@ def view_chat(chat_id):
             return redirect(url_for('view_chat', chat_id=chat_id))
 
         images = voice = video = ''
+        # معالجة الصور المرفوعة
         if 'images' in request.files:
             files = request.files.getlist('images')
-            images = save_multiple_files(files, subfolder=f"chats/{chat_id}")
+            if files and files[0].filename:
+                images = save_multiple_files(files, subfolder=f"chats/{chat_id}")
+                print(f"📸 تم رفع صور: {images}")  # للتتبع
+        # معالجة المقطع الصوتي
         if 'voice' in request.files:
             f = request.files['voice']
-            voice = save_file_to_local(f, subfolder=f"chats/{chat_id}")
+            if f and f.filename:
+                voice = save_file_to_local(f, subfolder=f"chats/{chat_id}")
+                print(f"🎤 تم رفع صوت: {voice}")
+        # معالجة الفيديو
         if 'video' in request.files:
             f = request.files['video']
-            video = save_file_to_local(f, subfolder=f"chats/{chat_id}")
+            if f and f.filename:
+                video = save_file_to_local(f, subfolder=f"chats/{chat_id}")
+                print(f"🎥 تم رفع فيديو: {video}")
 
         msg = Message(chat_id=chat_id, sender_id=current_user.id, content=content, images=images, voice=voice, video=video)
         db.session.add(msg)
@@ -778,7 +789,7 @@ def logout():
 
 print("✅ الجزء الأول من المسارات (الرئيسية، الملف الشخصي، الدردشة) تم تحميله بنجاح.")
 print("✅ أضف الآن الجزء الثاني (باقي المسارات) لإكمال الموقع.")# ============================================================
-# الجزء الثاني: جميع المسارات المتبقية (لوحات التحكم، الطلبات، العروض، التقييمات، الإدارة)
+# الجزء الثاني: جميع المسارات المتبقية مع تحسينات المدينة
 # ============================================================
 
 # ================== قائمة الحرفيين ==================
@@ -793,7 +804,7 @@ def artisans_list():
     <!DOCTYPE html><html dir="rtl"><head><title>قائمة الحرفيين</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <style>.stats-mini{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.7);color:#fff;padding:5px 10px;border-radius:20px;font-size:12px;z-index:9999;opacity:0.6;}.stats-mini:hover{opacity:1;}</style>
+    <style>.stats-mini{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.7);color:#fff;padding:5px 10px;border-radius:20px;font-size:12px;z-index:9999;opacity:0.6;}</style>
     </head>
     <body>
     <div class="stats-mini">👥 {{ User.query.count() }} | 🔨 {{ User.query.filter_by(user_type='artisan').count() }}</div>
@@ -933,7 +944,7 @@ def login():
     </div></body></html>
     ''', User=User)
 
-# ================== تسجيل جديد ==================
+# ================== تسجيل جديد مع تحسين خانة المدينة ==================
 @app.route('/register', methods=['GET','POST'])
 def register():
     if request.method == 'POST':
@@ -960,6 +971,8 @@ def register():
         return redirect(url_for('complete_profile'))
     
     default_type = request.args.get('type', 'client')
+    # قائمة المدن المقترحة (يمكن تعديلها)
+    cities = ['مراكش', 'الدار البيضاء', 'الرباط', 'فاس', 'طنجة', 'أكادير', 'مكناس', 'وجدة', 'القنيطرة', 'تطوان']
     return render_template_string('''
     <!DOCTYPE html><html dir="rtl"><head><title>تسجيل جديد</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -993,6 +1006,16 @@ def register():
         <form method="POST" id="registerForm">
             <div class="mb-3"><input type="email" name="email" class="form-control" placeholder="البريد الإلكتروني" required></div>
             <div class="mb-3"><input type="password" name="password" class="form-control" placeholder="كلمة المرور" required></div>
+            <!-- خانة المدينة مع إمكانية الإدخال اليدوي -->
+            <div class="mb-3">
+                <label for="district" class="form-label">المدينة (يمكنك اختيار أو كتابة مدينتك)</label>
+                <input list="cities" name="district" id="district" class="form-control" placeholder="اختر أو اكتب مدينتك" required>
+                <datalist id="cities">
+                    {% for city in cities %}
+                    <option value="{{ city }}">
+                    {% endfor %}
+                </datalist>
+            </div>
             <button type="submit" class="btn btn-primary w-100">تسجيل</button>
         </form>
         <p class="mt-3 text-center">لديك حساب؟ <a href="/login">تسجيل دخول</a></p>
@@ -1000,9 +1023,9 @@ def register():
     </div>
     <script>const urlParams = new URLSearchParams(window.location.search); const type = urlParams.get('type') || 'client'; if (type === 'client') { document.querySelector('.form-check input[value="artisan"]').parentElement.style.display = 'none'; } else if (type === 'artisan') { document.querySelector('.form-check input[value="client"]').parentElement.style.display = 'none'; }</script>
     </body></html>
-    ''', default_type=default_type, User=User)
+    ''', default_type=default_type, User=User, cities=cities)
 
-# ================== إكمال الملف الشخصي ==================
+# ================== إكمال الملف الشخصي مع تحسين المدينة ==================
 @app.route('/complete-profile', methods=['GET','POST'])
 @login_required
 def complete_profile():
@@ -1052,6 +1075,8 @@ def complete_profile():
         else:
             return redirect(url_for('artisan_dashboard'))
     
+    # قائمة المدن المقترحة
+    cities = ['مراكش', 'الدار البيضاء', 'الرباط', 'فاس', 'طنجة', 'أكادير', 'مكناس', 'وجدة', 'القنيطرة', 'تطوان']
     return render_template_string('''
     <!DOCTYPE html><html dir="rtl"><head><title>إكمال الملف الشخصي</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -1066,7 +1091,16 @@ def complete_profile():
         <form method="POST" enctype="multipart/form-data">
             <div class="mb-3"><label>الصورة الشخصية (اختياري)</label><input type="file" name="profile_image" class="form-control" accept="image/*"></div>
             <div class="mb-3"><label>الاسم الكامل</label><input type="text" name="full_name" class="form-control" required></div>
-            <div class="mb-3"><label>مدينتك الحالية</label><input type="text" name="district" class="form-control" placeholder="مثال: مراكش" required></div>
+            <!-- خانة المدينة مع إمكانية الإدخال اليدوي -->
+            <div class="mb-3">
+                <label for="district" class="form-label">مدينتك الحالية (يمكنك اختيار أو كتابة)</label>
+                <input list="cities" name="district" id="district" class="form-control" placeholder="اختر أو اكتب مدينتك" required>
+                <datalist id="cities">
+                    {% for city in cities %}
+                    <option value="{{ city }}">
+                    {% endfor %}
+                </datalist>
+            </div>
             <div id="artisan-fields" style="display:none;">
                 <div class="mb-3"><label>تخصصك</label>
                     <select name="specialty" class="form-select">
@@ -1090,7 +1124,7 @@ def complete_profile():
             <button type="submit" class="btn btn-primary w-100">تم</button>
         </form>
     </div></body></html>
-    ''', User=User)
+    ''', User=User, cities=cities)
 
 # ================== الملف الشخصي العام ==================
 @app.route('/user/<int:user_id>')
@@ -1582,4 +1616,4 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=port, debug=False)
 
 print("✅ الجزء الثاني من المسارات (لوحات التحكم، الطلبات، العروض، التقييمات، الإدارة) تم تحميله بنجاح.")
-print("✅ الكود الكامل الآن جاهز. الموقع يعمل بكامل وظائفه.")
+print("✅ الكود الكامل الآن جاهز. الموقع يعمل بكامل وظائفه مع تحسينات المدينة والصورة التعليمية.")
