@@ -1,6 +1,6 @@
 # ============================================================
 # منصة بريكولات - النسخة النهائية (الجزء الأول)
-# مع تحسينات حجم الصورة التعليمية وإضافة مودال للتكبير
+# مع تحسين ألوان الرسائل في الدردشة
 # ============================================================
 
 import os
@@ -623,7 +623,7 @@ def profile():
     <script>function openModal(src){ document.getElementById('modalImage').src = src; new bootstrap.Modal(document.getElementById('imageModal')).show(); }</script>
     </body></html>''', current_user=current_user, avg_rating=avg_rating, num_ratings=num_ratings, portfolio_list=portfolio_list, User=User)
 
-# ================== الدردشة مع إمكانية حذف الصور وتحسين حجم الصورة التعليمية ==================
+# ================== الدردشة مع تحسين ألوان الرسائل وإمكانية حذف الصور ==================
 @app.route('/chat/<int:chat_id>', methods=['GET','POST'])
 @login_required
 def view_chat(chat_id):
@@ -684,8 +684,36 @@ def view_chat(chat_id):
     <style>
         .stats-mini{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.7);color:#fff;padding:5px 10px;border-radius:20px;font-size:12px;z-index:9999;opacity:0.6;}
         .message-container{height:400px;overflow-y:scroll;border:1px solid #ddd;padding:10px;background:#f9f9f9;margin-bottom:10px;}
-        .my-message{background-color:#007bff;color:white;margin-left:auto;padding:8px 12px;border-radius:15px;max-width:70%;margin-bottom:5px;}
-        .other-message{background-color:#e9ecef;color:black;padding:8px 12px;border-radius:15px;max-width:70%;margin-bottom:5px;}
+        /* رسائلي (المستخدم الحالي) */
+        .my-message {
+            background-color: #007bff;
+            color: white;
+            margin-left: auto;
+            padding: 8px 12px;
+            border-radius: 15px;
+            max-width: 70%;
+            margin-bottom: 5px;
+            clear: both;
+            float: right;
+            text-align: right;
+        }
+        /* رسائل الطرف الآخر */
+        .other-message {
+            background-color: #e9ecef;
+            color: black;
+            padding: 8px 12px;
+            border-radius: 15px;
+            max-width: 70%;
+            margin-bottom: 5px;
+            clear: both;
+            float: left;
+            text-align: right;
+        }
+        .message-wrapper {
+            width: 100%;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
         .action-btn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:#f0f0f0;color:#333;text-decoration:none;margin-left:5px;cursor:pointer;border:none;}
         .action-btn:hover{background:#ddd;}
         .media-preview{max-width:100%;max-height:200px;margin-top:5px;border-radius:5px;}
@@ -712,6 +740,7 @@ def view_chat(chat_id):
             margin-top: 30px;
             padding-top: 20px;
             border-top: 2px solid #ddd;
+            clear: both;
         }
         .instruction-img {
             width: 100%;
@@ -735,42 +764,44 @@ def view_chat(chat_id):
         <!-- منطقة عرض الرسائل -->
         <div class="message-container" id="messageContainer">
             {% for m in messages %}
-                <div class="message-wrapper {% if m.sender_id == current_user.id %}my-message-wrapper{% else %}other-message-wrapper{% endif %}" style="margin-bottom: 15px;">
+                <div class="message-wrapper">
                     {% if m.is_blocked %}
-                        <div class="blocked-message">[هذه الرسالة محظورة]</div>
+                        <div class="blocked-message text-center p-2 bg-danger text-white rounded">[هذه الرسالة محظورة]</div>
                     {% else %}
-                        <div class="message-content">
-                            {% if m.content and (m.content.startswith('https://www.google.com/maps?q=') or m.content.startswith('https://maps.app.goo.gl/') or 'maps.google.com' in m.content) %}
-                                <a href="{{ m.content }}" target="_blank">📍 موقع على الخريطة</a>
-                            {% elif m.content %}
-                                {{ m.content }}
+                        <div class="{% if m.sender_id == current_user.id %}my-message{% else %}other-message{% endif %}">
+                            <div class="message-content">
+                                {% if m.content and (m.content.startswith('https://www.google.com/maps?q=') or m.content.startswith('https://maps.app.goo.gl/') or 'maps.google.com' in m.content) %}
+                                    <a href="{{ m.content }}" target="_blank" style="color: {% if m.sender_id == current_user.id %}white{% else %}blue{% endif %};">📍 موقع على الخريطة</a>
+                                {% elif m.content %}
+                                    {{ m.content }}
+                                {% endif %}
+                            </div>
+                            {% if m.images %}
+                                <div style="display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; justify-content: {% if m.sender_id == current_user.id %}flex-end{% else %}flex-start{% endif %};">
+                                    {% for img in m.images.split(',') %}
+                                        <div class="image-container">
+                                            <a href="{{ img }}" target="_blank">
+                                                <img src="{{ img }}" class="media-preview" style="width:100px; height:100px; object-fit:cover;">
+                                            </a>
+                                            {% if m.sender_id == current_user.id %}
+                                                <form method="POST" style="display:inline;" onsubmit="return confirm('هل أنت متأكد من حذف هذه الصورة؟');">
+                                                    <input type="hidden" name="action" value="delete_message_image">
+                                                    <input type="hidden" name="message_id" value="{{ m.id }}">
+                                                    <input type="hidden" name="image_url" value="{{ img }}">
+                                                    <button type="submit" class="delete-image-btn" title="حذف الصورة">×</button>
+                                                </form>
+                                            {% endif %}
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                            {% if m.voice %}
+                                <audio controls src="{{ m.voice }}" style="width:100%; margin-top:5px;"></audio>
+                            {% endif %}
+                            {% if m.video %}
+                                <video controls src="{{ m.video }}" style="max-width:100%; max-height:200px; margin-top:5px;"></video>
                             {% endif %}
                         </div>
-                        {% if m.images %}
-                            <div style="display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px;">
-                                {% for img in m.images.split(',') %}
-                                    <div class="image-container">
-                                        <a href="{{ img }}" target="_blank">
-                                            <img src="{{ img }}" class="media-preview" style="width:100px; height:100px; object-fit:cover;">
-                                        </a>
-                                        {% if m.sender_id == current_user.id %}
-                                            <form method="POST" style="display:inline;" onsubmit="return confirm('هل أنت متأكد من حذف هذه الصورة؟');">
-                                                <input type="hidden" name="action" value="delete_message_image">
-                                                <input type="hidden" name="message_id" value="{{ m.id }}">
-                                                <input type="hidden" name="image_url" value="{{ img }}">
-                                                <button type="submit" class="delete-image-btn" title="حذف الصورة">×</button>
-                                            </form>
-                                        {% endif %}
-                                    </div>
-                                {% endfor %}
-                            </div>
-                        {% endif %}
-                        {% if m.voice %}
-                            <audio controls src="{{ m.voice }}" style="width:100%; margin-top:5px;"></audio>
-                        {% endif %}
-                        {% if m.video %}
-                            <video controls src="{{ m.video }}" style="max-width:100%; max-height:200px; margin-top:5px;"></video>
-                        {% endif %}
                     {% endif %}
                 </div>
             {% endfor %}
@@ -1746,4 +1777,4 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=port, debug=False)
 
 print("✅ الجزء الثاني من المسارات (لوحات التحكم، الطلبات، العروض، التقييمات، الإدارة) تم تحميله بنجاح.")
-print("✅ الكود الكامل الآن جاهز. الموقع يعمل بكامل وظائفه مع تحسينات المدينة وحذف الصور في الدردشة.")
+print("✅ الكود الكامل الآن جاهز. الموقع يعمل بكامل وظائفه مع تحسينات المدينة وحذف الصور في الدردشة وألوان الرسائل.")
