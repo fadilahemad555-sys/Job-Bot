@@ -1,6 +1,6 @@
 # ============================================================
 # منصة بريكولات - النسخة النهائية (الجزء الأول)
-# مع تحسينات المدينة والصورة التعليمية وإضافة حذف الصور في الدردشة
+# مع تحسينات رفع الصورة التعليمية وحذف الصور في الدردشة
 # ============================================================
 
 import os
@@ -28,6 +28,7 @@ app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
 # ================== إعدادات التخزين المحلي (مسار مطلق) ==================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
+STATIC_FOLDER = os.path.join(BASE_DIR, 'static')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'mp4', 'mp3', 'wav', 'ogg', 'webm'}
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -40,6 +41,7 @@ os.makedirs(os.path.join(UPLOAD_FOLDER, 'offers'), exist_ok=True)
 os.makedirs(os.path.join(UPLOAD_FOLDER, 'chats'), exist_ok=True)
 os.makedirs(os.path.join(UPLOAD_FOLDER, 'artisans'), exist_ok=True)
 os.makedirs(os.path.join(UPLOAD_FOLDER, 'portfolio'), exist_ok=True)
+os.makedirs(STATIC_FOLDER, exist_ok=True)  # التأكد من وجود مجلد static
 
 # ================== إعدادات SQLAlchemy و Login ==================
 db = SQLAlchemy(app)
@@ -347,6 +349,11 @@ def dashboard_url_for(user):
 def uploaded_file(filename):
     """خدمة الملفات المرفوعة"""
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+# خدمة الملفات الثابتة (للصورة التعليمية)
+@app.route('/static/<path:filename>')
+def static_files(filename):
+    return send_from_directory(STATIC_FOLDER, filename)
 
 # تحديث دوال Jinja2
 app.jinja_env.globals.update(
@@ -774,18 +781,21 @@ def view_chat(chat_id):
             
             <!-- صورة تعليمية ثابتة للجميع (تظهر إذا تم رفعها) -->
             <div class="mt-3 text-center">
-                <img src="{{ url_for('static', filename='instruction.jpg') }}?v={{ range(1, 1000) | random }}" 
+                {% set instruction_image = url_for('static', filename='instruction.jpg') %}
+                <img src="{{ instruction_image }}?v={{ range(1, 1000) | random }}" 
                      alt="تعليمات إرسال الموقع" 
                      class="img-fluid rounded" 
                      style="max-width:100%; max-height:200px; object-fit: contain; border: 1px solid #ddd;">
+                <p class="text-muted small mt-1">تعليمات إرسال الموقع: اضغط على زر الموقع، افتح الخريطة، انسخ الرابط والصقه.</p>
             </div>
             
             <!-- زر رفع الصورة للمسؤول (يظهر فقط للأدمن) -->
             {% if current_user.is_admin %}
-            <div class="mt-2 p-2 bg-light rounded">
+            <div class="mt-2 p-3 bg-light rounded border">
+                <h6>رفع صورة تعليمية جديدة</h6>
                 <form method="POST" action="{{ url_for('upload_instruction_image') }}" enctype="multipart/form-data" class="d-flex align-items-center gap-2">
                     <input type="file" name="instruction_image" accept="image/*" class="form-control form-control-sm" style="width: auto;" required>
-                    <button type="submit" class="btn btn-sm btn-success">➕ رفع صورة تعليمية</button>
+                    <button type="submit" class="btn btn-sm btn-success">➕ رفع الصورة</button>
                 </form>
                 <small class="text-muted">هذه الصورة ستظهر لجميع المستخدمين.</small>
             </div>
@@ -817,7 +827,7 @@ def view_chat(chat_id):
         </script>
     </div></body></html>''', messages=messages, other=other, User=User)
 
-# ================== رفع الصورة التعليمية (للمسؤول فقط) ==================
+# ================== رفع الصورة التعليمية (للمسؤول فقط) مع تحسين التغذية الراجعة ==================
 @app.route('/upload-instruction-image', methods=['POST'])
 @login_required
 @admin_required
@@ -830,16 +840,21 @@ def upload_instruction_image():
         flash('الملف فارغ', 'danger')
         return redirect(request.referrer or url_for('index'))
     if file and allowed_file(file.filename):
-        # التأكد من وجود مجلد static
-        static_dir = app.static_folder
-        if static_dir is None:
-            static_dir = os.path.join(app.root_path, 'static')
-            os.makedirs(static_dir, exist_ok=True)
-        # حفظ الصورة باسم ثابت
-        filename = 'instruction.jpg'
-        filepath = os.path.join(static_dir, filename)
-        file.save(filepath)
-        flash('تم رفع الصورة التعليمية بنجاح', 'success')
+        try:
+            # حفظ الصورة باسم ثابت في مجلد static
+            filename = 'instruction.jpg'
+            filepath = os.path.join(STATIC_FOLDER, filename)
+            
+            # حذف الصورة القديمة إذا كانت موجودة
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            
+            file.save(filepath)
+            flash('✅ تم رفع الصورة التعليمية بنجاح', 'success')
+            print(f"✅ تم حفظ الصورة التعليمية في: {filepath}")
+        except Exception as e:
+            flash(f'❌ خطأ في حفظ الصورة: {str(e)}', 'danger')
+            print(f"❌ خطأ في رفع الصورة التعليمية: {e}")
     else:
         flash('نوع الملف غير مسموح به', 'danger')
     return redirect(request.referrer or url_for('index'))
@@ -865,7 +880,7 @@ MOROCCAN_CITIES = [
     'طانطان', 'السمارة', 'العيون', 'بوجدور', 'الفحص أنجرة', 'إفران', 'خنيفرة', 'خريبكة', 'القنيطرة', 'مراكش',
     'مكناس', 'الناظور', 'صفرو', 'زاكورة', 'تاونات', 'الفقيه بن صالح', 'جرسيف', 'الدريوش', 'ميدلت', 'تنجداد',
     'الريصاني', 'طاطا', 'أسا الزاك', 'السمارة', 'بوجدور', 'العيون', 'الداخلة', 'كلميم', 'طانطان', 'تزنيت',
-    'سيدي إفني', 'الصويرة', 'شيشاوة', 'الحوز', 'الرحامنة', 'قلعة السراغنة', 'بني ملال', 'الفقي بن صالح',
+    'سيدي إفني', 'الصويرة', 'شيشاوة', 'الحوز', 'الرحامنة', 'قلعة السراغنة', 'بني ملال', 'الفقيه بن صالح',
     'خريبكة', 'وادي زم', 'سطات', 'ابن احمد', 'سيدي بنور', 'الجديدة', 'آزمور', 'آسفي', 'اليوسفية', 'تارودانت',
     'أولاد تايمة', 'بيوكرى', 'أيت باها', 'إنزكان', 'أيت ملول', 'العيون', 'السمارة', 'بوجدور', 'طانطان',
     'الرشيدية', 'ورزازات', 'زاكورة', 'تنغير', 'بومالن دادس', 'ميدلت', 'الريصاني', 'تنجداد', 'جرسيف',
