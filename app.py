@@ -1,6 +1,6 @@
 # ============================================================
 # منصة بريكولات - النسخة النهائية (الجزء الأول)
-# مع تحديث كلمة سر الأدمن
+# مع تحسينات المدينة والصورة التعليمية وإضافة حذف الصور في الدردشة
 # ============================================================
 
 import os
@@ -265,6 +265,24 @@ def delete_file(file_url):
             print(f"⚠️ الملف غير موجود: {full_path}")
     except Exception as e:
         print(f"❌ خطأ في حذف الملف: {e}")
+
+# دالة جديدة لحذف صورة من رسالة معينة
+def delete_message_image(message_id, image_url):
+    """حذف صورة من رسالة محددة (تستخدم في الدردشة)"""
+    if not image_url:
+        return False
+    # حذف الملف الفعلي
+    delete_file(image_url)
+    # إزالة الرابط من حقل images في الرسالة
+    msg = Message.query.get(message_id)
+    if msg and msg.images:
+        urls = msg.images.split(',')
+        if image_url in urls:
+            urls.remove(image_url)
+            msg.images = ','.join(urls) if urls else None
+            db.session.commit()
+            return True
+    return False
 
 # ================== دوال مساعدة أخرى ==================
 
@@ -598,7 +616,7 @@ def profile():
     <script>function openModal(src){ document.getElementById('modalImage').src = src; new bootstrap.Modal(document.getElementById('imageModal')).show(); }</script>
     </body></html>''', current_user=current_user, avg_rating=avg_rating, num_ratings=num_ratings, portfolio_list=portfolio_list, User=User)
 
-# ================== الدردشة مع إصلاح مشكلة رفع الملفات ==================
+# ================== الدردشة مع إمكانية حذف الصور والصورة التعليمية الثابتة ==================
 @app.route('/chat/<int:chat_id>', methods=['GET','POST'])
 @login_required
 def view_chat(chat_id):
@@ -607,26 +625,35 @@ def view_chat(chat_id):
         return redirect(url_for('index'))
     other = User.query.get(chat.artisan_id if current_user.id == chat.client_id else chat.client_id)
 
-    if request.method == 'POST':
+    # معالجة حذف صورة من رسالة
+    if request.method == 'POST' and request.form.get('action') == 'delete_message_image':
+        msg_id = request.form.get('message_id')
+        img_url = request.form.get('image_url')
+        if msg_id and img_url:
+            # التحقق من أن المستخدم هو مالك الرسالة
+            msg = Message.query.get(msg_id)
+            if msg and msg.sender_id == current_user.id:
+                delete_message_image(msg_id, img_url)
+                flash('تم حذف الصورة', 'success')
+        return redirect(url_for('view_chat', chat_id=chat_id))
+
+    if request.method == 'POST' and request.form.get('action') != 'delete_message_image':
         content = request.form.get('message', '')
         if contains_blocked_patterns(content):
             flash('الرسالة تحتوي على رقم هاتف أو رابط تواصل ممنوع')
             return redirect(url_for('view_chat', chat_id=chat_id))
 
         images = voice = video = ''
-        # معالجة الصور المرفوعة
         if 'images' in request.files:
             files = request.files.getlist('images')
             if files and files[0].filename:
                 images = save_multiple_files(files, subfolder=f"chats/{chat_id}")
-                print(f"📸 تم رفع صور: {images}")  # للتتبع
-        # معالجة المقطع الصوتي
+                print(f"📸 تم رفع صور: {images}")
         if 'voice' in request.files:
             f = request.files['voice']
             if f and f.filename:
                 voice = save_file_to_local(f, subfolder=f"chats/{chat_id}")
                 print(f"🎤 تم رفع صوت: {voice}")
-        # معالجة الفيديو
         if 'video' in request.files:
             f = request.files['video']
             if f and f.filename:
@@ -655,6 +682,25 @@ def view_chat(chat_id):
         .action-btn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:#f0f0f0;color:#333;text-decoration:none;margin-left:5px;cursor:pointer;border:none;}
         .action-btn:hover{background:#ddd;}
         .media-preview{max-width:100%;max-height:200px;margin-top:5px;border-radius:5px;}
+        .delete-image-btn {
+            position: absolute;
+            top: 0;
+            right: 0;
+            background: rgba(255,0,0,0.7);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 25px;
+            height: 25px;
+            font-size: 16px;
+            line-height: 1;
+            cursor: pointer;
+        }
+        .image-container {
+            position: relative;
+            display: inline-block;
+            margin: 5px;
+        }
     </style></head>
     <body>
     <div class="stats-mini">👥 {{ User.query.count() }} | 🔨 {{ User.query.filter_by(user_type='artisan').count() }}</div>
@@ -667,35 +713,44 @@ def view_chat(chat_id):
         </div>
         <div class="message-container" id="messageContainer">
             {% for m in messages %}
-                {% if m.is_blocked %}
-                <div class="blocked-message">[هذه الرسالة محظورة]</div>
-                {% elif m.sender_id == current_user.id %}
-                <div class="my-message">
-                    <div class="message-content">
-                        {% if m.content and (m.content.startswith('https://www.google.com/maps?q=') or m.content.startswith('https://maps.app.goo.gl/') or 'maps.google.com' in m.content) %}
-                            <a href="{{ m.content }}" target="_blank">📍 موقع على الخريطة</a>
-                        {% elif m.content %}
-                            {{ m.content }}
+                <div class="message-wrapper {% if m.sender_id == current_user.id %}my-message-wrapper{% else %}other-message-wrapper{% endif %}" style="margin-bottom: 15px;">
+                    {% if m.is_blocked %}
+                        <div class="blocked-message">[هذه الرسالة محظورة]</div>
+                    {% else %}
+                        <div class="message-content">
+                            {% if m.content and (m.content.startswith('https://www.google.com/maps?q=') or m.content.startswith('https://maps.app.goo.gl/') or 'maps.google.com' in m.content) %}
+                                <a href="{{ m.content }}" target="_blank">📍 موقع على الخريطة</a>
+                            {% elif m.content %}
+                                {{ m.content }}
+                            {% endif %}
+                        </div>
+                        {% if m.images %}
+                            <div style="display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px;">
+                                {% for img in m.images.split(',') %}
+                                    <div class="image-container">
+                                        <a href="{{ img }}" target="_blank">
+                                            <img src="{{ img }}" class="media-preview" style="width:100px; height:100px; object-fit:cover;">
+                                        </a>
+                                        {% if m.sender_id == current_user.id %}
+                                            <form method="POST" style="display:inline;" onsubmit="return confirm('هل أنت متأكد من حذف هذه الصورة؟');">
+                                                <input type="hidden" name="action" value="delete_message_image">
+                                                <input type="hidden" name="message_id" value="{{ m.id }}">
+                                                <input type="hidden" name="image_url" value="{{ img }}">
+                                                <button type="submit" class="delete-image-btn" title="حذف الصورة">×</button>
+                                            </form>
+                                        {% endif %}
+                                    </div>
+                                {% endfor %}
+                            </div>
                         {% endif %}
-                    </div>
-                    {% if m.images %}{% for img in m.images.split(',') %}<div><a href="{{ img }}" target="_blank"><img src="{{ img }}" class="media-preview"></a></div>{% endfor %}{% endif %}
-                    {% if m.voice %}<audio controls src="{{ m.voice }}" style="width:100%;"></audio>{% endif %}
-                    {% if m.video %}<video controls src="{{ m.video }}" style="max-width:100%;max-height:200px;"></video>{% endif %}
-                </div>
-                {% else %}
-                <div class="other-message">
-                    <div class="message-content">
-                        {% if m.content and (m.content.startswith('https://www.google.com/maps?q=') or m.content.startswith('https://maps.app.goo.gl/') or 'maps.google.com' in m.content) %}
-                            <a href="{{ m.content }}" target="_blank">📍 موقع</a>
-                        {% elif m.content %}
-                            {{ m.content }}
+                        {% if m.voice %}
+                            <audio controls src="{{ m.voice }}" style="width:100%; margin-top:5px;"></audio>
                         {% endif %}
-                    </div>
-                    {% if m.images %}{% for img in m.images.split(',') %}<div><a href="{{ img }}" target="_blank"><img src="{{ img }}" class="media-preview"></a></div>{% endfor %}{% endif %}
-                    {% if m.voice %}<audio controls src="{{ m.voice }}"></audio>{% endif %}
-                    {% if m.video %}<video controls src="{{ m.video }}" style="max-width:100%;max-height:200px;"></video>{% endif %}
+                        {% if m.video %}
+                            <video controls src="{{ m.video }}" style="max-width:100%; max-height:200px; margin-top:5px;"></video>
+                        {% endif %}
+                    {% endif %}
                 </div>
-                {% endif %}
             {% endfor %}
         </div>
 
@@ -798,8 +853,29 @@ def logout():
 
 print("✅ الجزء الأول من المسارات (الرئيسية، الملف الشخصي، الدردشة) تم تحميله بنجاح.")
 print("✅ أضف الآن الجزء الثاني (باقي المسارات) لإكمال الموقع.")# ============================================================
-# الجزء الثاني: جميع المسارات المتبقية مع تحسينات رفع الملفات في الدردشة
+# الجزء الثاني: جميع المسارات المتبقية مع قائمة كاملة لمدن المغرب
 # ============================================================
+
+# قائمة شاملة لمدن المغرب (للاستخدام في التسجيل وإكمال الملف الشخصي)
+MOROCCAN_CITIES = [
+    'أكادير', 'أيت ملول', 'أصيلة', 'بني ملال', 'بنسليمان', 'برشيد', 'بوجدور', 'بولمان', 'بوزنيقة', 'الداخلة',
+    'الدار البيضاء', 'فاس', 'فكيك', 'كلميم', 'العرائش', 'القصر الكبير', 'الحاجب', 'الحسيمة', 'الجديدة', 'جرادة',
+    'آسفي', 'صفرو', 'سطات', 'سلا', 'سيدي قاسم', 'سيدي سليمان', 'سوق الأربعاء', 'تازة', 'طنجة', 'تطوان',
+    'تيفلت', 'تيزنيت', 'وزان', 'ورزازات', 'وجدة', 'اليوسفية', 'الرشيدية', 'الرباط', 'تمارة', 'تارودانت',
+    'طانطان', 'السمارة', 'العيون', 'بوجدور', 'الفحص أنجرة', 'إفران', 'خنيفرة', 'خريبكة', 'القنيطرة', 'مراكش',
+    'مكناس', 'الناظور', 'صفرو', 'زاكورة', 'تاونات', 'الفقيه بن صالح', 'جرسيف', 'الدريوش', 'ميدلت', 'تنجداد',
+    'الريصاني', 'طاطا', 'أسا الزاك', 'السمارة', 'بوجدور', 'العيون', 'الداخلة', 'كلميم', 'طانطان', 'تزنيت',
+    'سيدي إفني', 'الصويرة', 'شيشاوة', 'الحوز', 'الرحامنة', 'قلعة السراغنة', 'بني ملال', 'الفقي بن صالح',
+    'خريبكة', 'وادي زم', 'سطات', 'ابن احمد', 'سيدي بنور', 'الجديدة', 'آزمور', 'آسفي', 'اليوسفية', 'تارودانت',
+    'أولاد تايمة', 'بيوكرى', 'أيت باها', 'إنزكان', 'أيت ملول', 'العيون', 'السمارة', 'بوجدور', 'طانطان',
+    'الرشيدية', 'ورزازات', 'زاكورة', 'تنغير', 'بومالن دادس', 'ميدلت', 'الريصاني', 'تنجداد', 'جرسيف',
+    'تازة', 'تاونات', 'صفرو', 'إفران', 'الحاجب', 'الفحص أنجرة', 'تطوان', 'المضيق', 'الفنيدق', 'مرتيل',
+    'أصيلة', 'العرائش', 'القصر الكبير', 'وزان', 'شفشاون', 'الحسيمة', 'بني بوعياش', 'امزورن', 'الناظور',
+    'زايو', 'أفسو', 'الدريوش', 'جرادة', 'بوعرفة', 'فكيك', 'بني ملال', 'القنيطرة', 'سيدي قاسم', 'سيدي سليمان',
+    'سوق الأربعاء', 'تيفلت', 'الخميسات', 'تمارة', 'الرباط', 'سلا', 'المحمدية', 'الجديدة', 'برشيد',
+    'بنسليمان', 'الدار البيضاء', 'مراكش', 'قلعة السراغنة', 'شيشاوة', 'الحوز', 'أكادير', 'إنزكان',
+    'أيت ملول', 'تيزنيت', 'طانطان', 'العيون', 'الداخلة'
+]
 
 # ================== قائمة الحرفيين ==================
 @app.route('/artisans')
@@ -953,7 +1029,7 @@ def login():
     </div></body></html>
     ''', User=User)
 
-# ================== تسجيل جديد مع تحسين خانة المدينة ==================
+# ================== تسجيل جديد مع قائمة مدن كاملة ==================
 @app.route('/register', methods=['GET','POST'])
 def register():
     if request.method == 'POST':
@@ -980,8 +1056,6 @@ def register():
         return redirect(url_for('complete_profile'))
     
     default_type = request.args.get('type', 'client')
-    # قائمة المدن المقترحة (يمكن تعديلها)
-    cities = ['مراكش', 'الدار البيضاء', 'الرباط', 'فاس', 'طنجة', 'أكادير', 'مكناس', 'وجدة', 'القنيطرة', 'تطوان']
     return render_template_string('''
     <!DOCTYPE html><html dir="rtl"><head><title>تسجيل جديد</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -1015,12 +1089,12 @@ def register():
         <form method="POST" id="registerForm">
             <div class="mb-3"><input type="email" name="email" class="form-control" placeholder="البريد الإلكتروني" required></div>
             <div class="mb-3"><input type="password" name="password" class="form-control" placeholder="كلمة المرور" required></div>
-            <!-- خانة المدينة مع إمكانية الإدخال اليدوي -->
+            <!-- خانة المدينة مع قائمة منسدلة كاملة وإمكانية الإدخال اليدوي -->
             <div class="mb-3">
                 <label for="district" class="form-label">المدينة (يمكنك اختيار أو كتابة مدينتك)</label>
                 <input list="cities" name="district" id="district" class="form-control" placeholder="اختر أو اكتب مدينتك" required>
                 <datalist id="cities">
-                    {% for city in cities %}
+                    {% for city in MOROCCAN_CITIES %}
                     <option value="{{ city }}">
                     {% endfor %}
                 </datalist>
@@ -1032,9 +1106,9 @@ def register():
     </div>
     <script>const urlParams = new URLSearchParams(window.location.search); const type = urlParams.get('type') || 'client'; if (type === 'client') { document.querySelector('.form-check input[value="artisan"]').parentElement.style.display = 'none'; } else if (type === 'artisan') { document.querySelector('.form-check input[value="client"]').parentElement.style.display = 'none'; }</script>
     </body></html>
-    ''', default_type=default_type, User=User, cities=cities)
+    ''', default_type=default_type, User=User, MOROCCAN_CITIES=MOROCCAN_CITIES)
 
-# ================== إكمال الملف الشخصي مع تحسين المدينة ==================
+# ================== إكمال الملف الشخصي مع قائمة مدن كاملة ==================
 @app.route('/complete-profile', methods=['GET','POST'])
 @login_required
 def complete_profile():
@@ -1084,8 +1158,6 @@ def complete_profile():
         else:
             return redirect(url_for('artisan_dashboard'))
     
-    # قائمة المدن المقترحة
-    cities = ['مراكش', 'الدار البيضاء', 'الرباط', 'فاس', 'طنجة', 'أكادير', 'مكناس', 'وجدة', 'القنيطرة', 'تطوان']
     return render_template_string('''
     <!DOCTYPE html><html dir="rtl"><head><title>إكمال الملف الشخصي</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -1100,12 +1172,12 @@ def complete_profile():
         <form method="POST" enctype="multipart/form-data">
             <div class="mb-3"><label>الصورة الشخصية (اختياري)</label><input type="file" name="profile_image" class="form-control" accept="image/*"></div>
             <div class="mb-3"><label>الاسم الكامل</label><input type="text" name="full_name" class="form-control" required></div>
-            <!-- خانة المدينة مع إمكانية الإدخال اليدوي -->
+            <!-- خانة المدينة مع قائمة منسدلة كاملة وإمكانية الإدخال اليدوي -->
             <div class="mb-3">
                 <label for="district" class="form-label">مدينتك الحالية (يمكنك اختيار أو كتابة)</label>
                 <input list="cities" name="district" id="district" class="form-control" placeholder="اختر أو اكتب مدينتك" required>
                 <datalist id="cities">
-                    {% for city in cities %}
+                    {% for city in MOROCCAN_CITIES %}
                     <option value="{{ city }}">
                     {% endfor %}
                 </datalist>
@@ -1133,7 +1205,7 @@ def complete_profile():
             <button type="submit" class="btn btn-primary w-100">تم</button>
         </form>
     </div></body></html>
-    ''', User=User, cities=cities)
+    ''', User=User, MOROCCAN_CITIES=MOROCCAN_CITIES)
 
 # ================== الملف الشخصي العام ==================
 @app.route('/user/<int:user_id>')
@@ -1625,4 +1697,4 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=port, debug=False)
 
 print("✅ الجزء الثاني من المسارات (لوحات التحكم، الطلبات، العروض، التقييمات، الإدارة) تم تحميله بنجاح.")
-print("✅ الكود الكامل الآن جاهز. الموقع يعمل بكامل وظائفه مع تحسينات المدينة والصورة التعليمية.")
+print("✅ الكود الكامل الآن جاهز. الموقع يعمل بكامل وظائفه مع تحسينات المدينة وحذف الصور في الدردشة.")
