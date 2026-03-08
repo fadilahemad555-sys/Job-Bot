@@ -1,6 +1,6 @@
 # ============================================================
 # منصة بريكولات - النسخة النهائية (الجزء الأول)
-# مع تحسينات رفع الصورة التعليمية وحذف الصور في الدردشة
+# مع تحسينات فصل الصورة التعليمية وإضافة تتبع الأخطاء
 # ============================================================
 
 import os
@@ -623,7 +623,7 @@ def profile():
     <script>function openModal(src){ document.getElementById('modalImage').src = src; new bootstrap.Modal(document.getElementById('imageModal')).show(); }</script>
     </body></html>''', current_user=current_user, avg_rating=avg_rating, num_ratings=num_ratings, portfolio_list=portfolio_list, User=User)
 
-# ================== الدردشة مع إمكانية حذف الصور والصورة التعليمية الثابتة ==================
+# ================== الدردشة مع إمكانية حذف الصور وفصل الصورة التعليمية ==================
 @app.route('/chat/<int:chat_id>', methods=['GET','POST'])
 @login_required
 def view_chat(chat_id):
@@ -708,6 +708,11 @@ def view_chat(chat_id):
             display: inline-block;
             margin: 5px;
         }
+        .instruction-section {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 2px solid #ddd;
+        }
     </style></head>
     <body>
     <div class="stats-mini">👥 {{ User.query.count() }} | 🔨 {{ User.query.filter_by(user_type='artisan').count() }}</div>
@@ -718,6 +723,8 @@ def view_chat(chat_id):
                 <h4><a href="/user/{{ other.id }}">{{ other.full_name or other.username }}</a></h4>
             </div>
         </div>
+        
+        <!-- منطقة عرض الرسائل -->
         <div class="message-container" id="messageContainer">
             {% for m in messages %}
                 <div class="message-wrapper {% if m.sender_id == current_user.id %}my-message-wrapper{% else %}other-message-wrapper{% endif %}" style="margin-bottom: 15px;">
@@ -761,6 +768,7 @@ def view_chat(chat_id):
             {% endfor %}
         </div>
 
+        <!-- منطقة إرسال الرسائل والأزرار -->
         <form method="POST" enctype="multipart/form-data" id="chatForm">
             <div class="mb-2"><textarea name="message" class="form-control" placeholder="اكتب رسالتك..." rows="2" id="messageText"></textarea></div>
             <div class="d-flex align-items-center gap-2 mb-2">
@@ -778,11 +786,12 @@ def view_chat(chat_id):
                 </div>
                 <small class="text-muted">بعد لصق الرابط، اضغط "إضافة" ليظهر في رسالتك.</small>
             </div>
-            
-            <!-- صورة تعليمية ثابتة للجميع (تظهر إذا تم رفعها) -->
+        </form>
+        
+        <!-- منطقة الصورة التعليمية (منفصلة تماماً عن منطقة الإرسال) -->
+        <div class="instruction-section">
             <div class="mt-3 text-center">
-                {% set instruction_image = url_for('static', filename='instruction.jpg') %}
-                <img src="{{ instruction_image }}?v={{ range(1, 1000) | random }}" 
+                <img src="{{ url_for('static', filename='instruction.jpg') }}?v={{ range(1, 1000) | random }}" 
                      alt="تعليمات إرسال الموقع" 
                      class="img-fluid rounded" 
                      style="max-width:100%; max-height:200px; object-fit: contain; border: 1px solid #ddd;">
@@ -800,7 +809,7 @@ def view_chat(chat_id):
                 <small class="text-muted">هذه الصورة ستظهر لجميع المستخدمين.</small>
             </div>
             {% endif %}
-        </form>
+        </div>
 
         <script>
         var container = document.getElementById('messageContainer');
@@ -841,7 +850,6 @@ def upload_instruction_image():
         return redirect(request.referrer or url_for('index'))
     if file and allowed_file(file.filename):
         try:
-            # حفظ الصورة باسم ثابت في مجلد static
             filename = 'instruction.jpg'
             filepath = os.path.join(STATIC_FOLDER, filename)
             
