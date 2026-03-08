@@ -1,6 +1,6 @@
 # ============================================================
 # منصة بريكولات - النسخة النهائية (الجزء الأول)
-# مع تحسينات فصل الصورة التعليمية وإضافة تتبع الأخطاء
+# مع تحسينات حجم الصورة التعليمية وإضافة مودال للتكبير
 # ============================================================
 
 import os
@@ -623,7 +623,7 @@ def profile():
     <script>function openModal(src){ document.getElementById('modalImage').src = src; new bootstrap.Modal(document.getElementById('imageModal')).show(); }</script>
     </body></html>''', current_user=current_user, avg_rating=avg_rating, num_ratings=num_ratings, portfolio_list=portfolio_list, User=User)
 
-# ================== الدردشة مع إمكانية حذف الصور وفصل الصورة التعليمية ==================
+# ================== الدردشة مع إمكانية حذف الصور وتحسين حجم الصورة التعليمية ==================
 @app.route('/chat/<int:chat_id>', methods=['GET','POST'])
 @login_required
 def view_chat(chat_id):
@@ -713,6 +713,14 @@ def view_chat(chat_id):
             padding-top: 20px;
             border-top: 2px solid #ddd;
         }
+        .instruction-img {
+            width: 100%;
+            max-height: 400px;
+            object-fit: contain;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            cursor: pointer;
+        }
     </style></head>
     <body>
     <div class="stats-mini">👥 {{ User.query.count() }} | 🔨 {{ User.query.filter_by(user_type='artisan').count() }}</div>
@@ -793,9 +801,9 @@ def view_chat(chat_id):
             <div class="mt-3 text-center">
                 <img src="{{ url_for('static', filename='instruction.jpg') }}?v={{ range(1, 1000) | random }}" 
                      alt="تعليمات إرسال الموقع" 
-                     class="img-fluid rounded" 
-                     style="max-width:100%; max-height:200px; object-fit: contain; border: 1px solid #ddd;">
-                <p class="text-muted small mt-1">تعليمات إرسال الموقع: اضغط على زر الموقع، افتح الخريطة، انسخ الرابط والصقه.</p>
+                     class="instruction-img"
+                     onclick="openModal(this.src)">
+                <p class="text-muted small mt-1">تعليمات إرسال الموقع: اضغط على زر الموقع، افتح الخريطة، انسخ الرابط والصقه. (اضغط على الصورة لتكبيرها)</p>
             </div>
             
             <!-- زر رفع الصورة للمسؤول (يظهر فقط للأدمن) -->
@@ -809,6 +817,17 @@ def view_chat(chat_id):
                 <small class="text-muted">هذه الصورة ستظهر لجميع المستخدمين.</small>
             </div>
             {% endif %}
+        </div>
+
+        <!-- Modal لتكبير الصور -->
+        <div class="modal fade" id="imageModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-body">
+                        <img src="" id="modalImage" style="width:100%;">
+                    </div>
+                </div>
+            </div>
         </div>
 
         <script>
@@ -833,6 +852,13 @@ def view_chat(chat_id):
                 alert('الرجاء لصق الرابط أولاً.');
             }
         });
+
+        // دالة فتح المودال لتكبير الصور
+        function openModal(src) {
+            document.getElementById('modalImage').src = src;
+            var modal = new bootstrap.Modal(document.getElementById('imageModal'));
+            modal.show();
+        }
         </script>
     </div></body></html>''', messages=messages, other=other, User=User)
 
