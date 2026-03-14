@@ -1770,7 +1770,10 @@ def admin_dashboard():
     </body></html>''', total_users=total_users, total_clients=total_clients, total_artisans=total_artisans,
     total_requests=total_requests, total_offers=total_offers, total_chats=total_chats,
     recent_users=recent_users, recent_requests=recent_requests, chat_data=chat_data, time_ago=time_ago)
-
+# --- إضافة خاصة للتحقق من جوجل ---
+@app.route('/google367a012ee7694cb4.html')
+def google_verification():
+    return "google-site-verification: google367a012ee7694cb4.html"
 # ================== تشغيل التطبيق ==================
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
