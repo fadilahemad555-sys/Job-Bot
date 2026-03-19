@@ -1,6 +1,6 @@
 # ============================================================
 # منصة بريكولات - النسخة النهائية (الجزء الأول)
-# مع الداشبورد الموحد وإضافة مسار التحقق من جوجل
+# الصفحة الموحدة للجميع (زوار ومسجلين)
 # ============================================================
 
 import os
@@ -41,7 +41,7 @@ os.makedirs(os.path.join(UPLOAD_FOLDER, 'offers'), exist_ok=True)
 os.makedirs(os.path.join(UPLOAD_FOLDER, 'chats'), exist_ok=True)
 os.makedirs(os.path.join(UPLOAD_FOLDER, 'artisans'), exist_ok=True)
 os.makedirs(os.path.join(UPLOAD_FOLDER, 'portfolio'), exist_ok=True)
-os.makedirs(STATIC_FOLDER, exist_ok=True)  # التأكد من وجود مجلد static
+os.makedirs(STATIC_FOLDER, exist_ok=True)
 
 # ================== إعدادات SQLAlchemy و Login ==================
 db = SQLAlchemy(app)
@@ -59,14 +59,14 @@ class User(UserMixin, db.Model):
     password = db.Column(db.String(200), nullable=False)
     user_type = db.Column(db.String(20), nullable=False)  # 'client' أو 'artisan'
     full_name = db.Column(db.String(100), nullable=True)
-    phone = db.Column(db.String(20), nullable=True)        # رقم الهاتف (سيضاف لاحقاً)
+    phone = db.Column(db.String(20), nullable=True)
     district = db.Column(db.String(100), nullable=True)
     age = db.Column(db.Integer, nullable=True)
     gender = db.Column(db.String(10), nullable=True)
-    profile_image = db.Column(db.String(200), nullable=True)  # مسار الصورة (يبدأ بـ /uploads/...)
+    profile_image = db.Column(db.String(200), nullable=True)
     specialty = db.Column(db.String(50), nullable=True)
     video_work = db.Column(db.String(200), nullable=True)
-    portfolio = db.Column(db.Text, nullable=True)  # روابط مفصولة بفواصل
+    portfolio = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     experience_years = db.Column(db.Integer, nullable=True)
     is_admin = db.Column(db.Boolean, default=False)
@@ -148,11 +148,9 @@ with app.app_context():
         # تحديث كلمة سر الأدمن أولاً (إذا كان موجوداً)
         admin_user = User.query.filter_by(email='hichamcasawi709@gmail.com').first()
         if admin_user:
-            # تحديث كلمة السر إلى القيمة المطلوبة
             admin_user.password = generate_password_hash('hi555657585959')
             print("🔄 تم تحديث كلمة سر حساب الأدمن.")
         else:
-            # إنشاء حساب الأدمن إذا لم يكن موجوداً
             admin_user = User(
                 username='hicham',
                 email='hichamcasawi709@gmail.com',
@@ -166,7 +164,6 @@ with app.app_context():
             db.session.add(admin_user)
             print("➕ تم إضافة حساب الأدمن.")
 
-        # إضافة المستخدمين التجريبيين الآخرين إذا لم يكونوا موجودين
         if not User.query.filter_by(email='admin@test.com').first():
             admin = User(
                 username='admin',
@@ -217,7 +214,6 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def save_file_to_local(file, subfolder=''):
-    """حفظ ملف محلياً في المسار المطلق وإرجاع المسار النسبي (يبدأ بـ /uploads/)"""
     if not file or not file.filename:
         print("⚠️ الملف فارغ أو غير موجود")
         return None
@@ -229,14 +225,11 @@ def save_file_to_local(file, subfolder=''):
         name, ext = os.path.splitext(filename)
         timestamp = datetime.now().strftime('%Y%m%d%H%M%S%f')
         new_filename = f"{name}_{timestamp}{ext}"
-        
         folder_path = os.path.join(app.config['UPLOAD_FOLDER'], subfolder)
         os.makedirs(folder_path, exist_ok=True)
-        
         file_path = os.path.join(folder_path, new_filename)
         file.save(file_path)
         print(f"✅ تم حفظ الملف: {file_path}")
-        
         return f'/uploads/{subfolder}/{new_filename}'
     except Exception as e:
         print(f"❌ خطأ في حفظ الملف: {e}")
@@ -244,7 +237,6 @@ def save_file_to_local(file, subfolder=''):
         return None
 
 def save_multiple_files(files, subfolder=''):
-    """حفظ عدة ملفات وإرجاع روابط مفصولة بفواصل"""
     urls = []
     for file in files:
         if file and file.filename:
@@ -254,7 +246,6 @@ def save_multiple_files(files, subfolder=''):
     return ','.join(urls)
 
 def delete_file(file_url):
-    """حذف ملف من الخادم (إذا كان المسار يبدأ بـ /uploads/)"""
     if not file_url or not file_url.startswith('/uploads/'):
         return
     try:
@@ -268,14 +259,10 @@ def delete_file(file_url):
     except Exception as e:
         print(f"❌ خطأ في حذف الملف: {e}")
 
-# دالة جديدة لحذف صورة من رسالة معينة
 def delete_message_image(message_id, image_url):
-    """حذف صورة من رسالة محددة (تستخدم في الدردشة)"""
     if not image_url:
         return False
-    # حذف الملف الفعلي
     delete_file(image_url)
-    # إزالة الرابط من حقل images في الرسالة
     msg = Message.query.get(message_id)
     if msg and msg.images:
         urls = msg.images.split(',')
@@ -317,8 +304,7 @@ def get_artisan_rating(artisan_id):
     return round(avg, 1), len(ratings)
 
 def normalize_city(city):
-    if not city:
-        return city
+    if not city: return city
     return ' '.join(city.strip().split())
 
 def is_admin_user(user):
@@ -334,7 +320,6 @@ def admin_required(f):
     return decorated_function
 
 def dashboard_url_for(user):
-    """إرجاع الرابط المناسب للوحة تحكم المستخدم (الآن كل المستخدمين يذهبون إلى /dashboard)"""
     if user.is_authenticated:
         return url_for('dashboard')
     return url_for('index')
@@ -342,10 +327,8 @@ def dashboard_url_for(user):
 # ================== خدمة الملفات المرفوعة ==================
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
-    """خدمة الملفات المرفوعة"""
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-# خدمة الملفات الثابتة (للصورة التعليمية)
 @app.route('/static/<path:filename>')
 def static_files(filename):
     return send_from_directory(STATIC_FOLDER, filename)
@@ -365,107 +348,24 @@ def google_verification():
     return "google-site-verification: google367a012ee7694cb4.html"
 
 # ============================================================
-# المسارات الأساسية (الصفحة الرئيسية، الملف الشخصي، الدردشة، الداشبورد الموحد)
+# المسار الموحد للصفحة الرئيسية (لجميع المستخدمين)
 # ============================================================
-
 @app.route('/')
 def index():
-    if current_user.is_authenticated:
-        return redirect(url_for('dashboard'))
-    total_users = User.query.count()
-    total_requests = Request.query.count()
-    total_artisans = User.query.filter_by(user_type='artisan').count()
-    return render_template_string('''
-    <!DOCTYPE html>
-    <html dir="rtl">
-    <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>بريكولات - منصة الحرفيين في المغرب</title>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-        <style>
-            body{font-family:'Cairo',sans-serif;}
-            .hero{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;padding:60px 0;text-align:center;}
-            .hero-image{width:100px;height:100px;border-radius:10px;object-fit:cover;margin:10px;}
-            .navbar{background-color:#ffffff;box-shadow:0 2px 4px rgba(0,0,0,0.1);}
-            .role-btn{width:100%; margin:10px 0; padding:20px; font-size:1.2rem; text-align:right; border-radius:15px; color:white; text-decoration:none; display:flex; align-items:center;}
-            .role-icon{font-size:2rem; margin-left:15px;}
-            .btn-success.role-btn{background-color:#28a745;}
-            .btn-primary.role-btn{background-color:#007bff;}
-            .stats-mini {
-                position: fixed;
-                bottom: 10px;
-                left: 10px;
-                background: rgba(0,0,0,0.7);
-                color: white;
-                padding: 5px 10px;
-                border-radius: 20px;
-                font-size: 12px;
-                z-index: 9999;
-                opacity: 0.6;
-            }
-            .stats-mini:hover { opacity: 1; }
-        </style>
-    </head>
-    <body>
-        <div class="stats-mini">👥 {{ total_users }} | 🔨 {{ total_artisans }}</div>
-        <nav class="navbar navbar-expand-lg"><div class="container">
-            <a class="navbar-brand" href="{{ url_for('index') if not current_user.is_authenticated else url_for('dashboard') }}">بريكولات</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item"><a class="nav-link" href="/artisans">الحرفيين</a></li>
-                    <li class="nav-item"><a class="nav-link" href="/search">الطلبات</a></li>
-                </ul>
-                <div class="d-flex">
-                    {% if current_user.is_authenticated %}
-                        <a href="/profile" class="btn btn-outline-primary me-2">الملف الشخصي</a>
-                        {% if current_user.is_admin %}
-                        <a href="/admin" class="btn btn-outline-danger me-2">الإدارة</a>
-                        {% endif %}
-                        <a href="/logout" class="btn btn-danger">تسجيل خروج</a>
-                    {% else %}
-                        <a href="/login" class="btn btn-primary">تسجيل الدخول</a>
-                    {% endif %}
-                </div>
-            </div>
-        </div></nav>
-
-        <div class="hero">
-            <div class="container">
-                <div class="row justify-content-center">
-                    <div class="col-md-2 col-6"><img src="https://images.unsplash.com/photo-1564013799919-ab600027ffc6?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&q=80" class="hero-image" alt="منزل"><p class="mt-2">منزل</p></div>
-                    <div class="col-md-2 col-6"><img src="https://images.unsplash.com/photo-1504307651254-35680f356dfd?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&q=80" class="hero-image" alt="حرفي"><p class="mt-2">حرفي</p></div>
-                </div>
-                <h1 class="display-4 mt-4">مرحباً بكم في بريكولات</h1>
-                <p class="lead">تجمع الحرفيين مع أصحاب المنازل والشركات. سجل الدخول لترى الطلبات في مدينتك.</p>
-                <div class="row mt-5">
-                    <div class="col-md-6"><a href="/register?type=client" class="role-btn btn-success"><span class="role-icon">🏠</span><div class="text-right"><strong>أنا صاحب المنزل أو شركة</strong><br><small>أبحث في مدينتي عن بلومبي، جلايجي، كهربائي...</small></div></a></div>
-                    <div class="col-md-6"><a href="/register?type=artisan" class="role-btn btn-primary"><span class="role-icon">🔨</span><div class="text-right"><strong>أنا معلم حرفي</strong><br><small>أبحث عن بريكولات في المنازل...</small></div></a></div>
-                </div>
-            </div>
-        </div>
-        <div class="bg-light py-5"><div class="container"><h2 class="text-center mb-4">أفضل الحرفيين في المغرب</h2><div class="row">{% for artisan in artisans[:4] %}<div class="col-md-3 mb-3"><div class="card text-center"><img src="{{ artisan.profile_image or '/uploads/placeholder.jpg' }}" class="card-img-top" style="height:150px; object-fit:cover;"><div class="card-body"><h5><a href="/user/{{ artisan.id }}">{{ artisan.full_name or artisan.username }}</a></h5><p class="text-muted">{{ artisan.specialty }} - {{ artisan.district or 'غير محدد' }}</p></div></div></div>{% endfor %}</div><div class="text-center"><a href="/artisans" class="btn btn-outline-primary">عرض جميع الحرفيين</a></div></div></div>
-        <footer class="bg-dark text-white py-4"><div class="container text-center"><p>&copy; 2026 بريكولات</p></div></footer>
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    </body></html>
-    ''', total_users=total_users, total_requests=total_requests, total_artisans=total_artisans,
-    artisans=User.query.filter_by(user_type='artisan').limit(4).all())
-
-# ================== الداشبورد الموحد ==================
-@app.route('/dashboard')
-@login_required
-def dashboard():
-    # جلب طلبات المستخدم الحالي
-    my_requests = Request.query.filter_by(client_id=current_user.id).order_by(Request.created_at.desc()).all()
-    
-    # جلب جميع الطلبات المفتوحة (يمكن عرضها إذا أردت)
-    open_requests = Request.query.filter_by(status='open').order_by(Request.created_at.desc()).all()
-    
-    # عدد الرسائل غير المقروءة
-    unread = get_unread_messages_count(current_user.id)
-    
-    # إحصائيات
+    # إحصائيات عامة
     total_clients = User.query.filter_by(user_type='client').count()
     total_artisans = User.query.filter_by(user_type='artisan').count()
+    total_requests = Request.query.count()
+    
+    # جميع الطلبات المفتوحة
+    all_requests = Request.query.filter_by(status='open').order_by(Request.created_at.desc()).all()
+    
+    # للمستخدم المسجل: طلباته الخاصة وعدد الرسائل غير المقروءة
+    my_requests = []
+    unread = 0
+    if current_user.is_authenticated:
+        my_requests = Request.query.filter_by(client_id=current_user.id).order_by(Request.created_at.desc()).all()
+        unread = get_unread_messages_count(current_user.id)
     
     return render_template_string('''
     <!DOCTYPE html>
@@ -473,7 +373,7 @@ def dashboard():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>بريكولات - لوحة التحكم</title>
+        <title>بريكولات - منصة الحرفيين في المغرب</title>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
         <style>
             .stats-mini {
@@ -504,11 +404,14 @@ def dashboard():
                 text-decoration: none;
                 color: white;
                 font-weight: bold;
+                transition: 0.3s;
             }
             .action-btn.primary { background-color: #007bff; }
             .action-btn.success { background-color: #28a745; }
             .action-btn.warning { background-color: #ffc107; color: black; }
             .action-btn.info { background-color: #17a2b8; }
+            .action-btn.danger { background-color: #dc3545; }
+            .action-btn:hover { opacity: 0.8; }
             .request-card {
                 margin-bottom: 20px;
                 border: 1px solid #ddd;
@@ -516,49 +419,70 @@ def dashboard():
                 padding: 15px;
                 background: #f9f9f9;
             }
+            .warning-box {
+                background-color: #ffc107;
+                color: #856404;
+                padding: 15px;
+                border-radius: 10px;
+                margin: 20px 0;
+                text-align: center;
+                font-weight: bold;
+            }
         </style>
     </head>
     <body>
         <div class="stats-mini">👥 {{ total_clients }} | 🔨 {{ total_artisans }}</div>
         
         <div class="container mt-4">
-            <!-- شريط التنقل العلوي -->
+            <!-- شريط التنقل العلوي - يختلف حسب تسجيل الدخول -->
             <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2>مرحباً {{ current_user.full_name or current_user.username }}</h2>
+                <h2>مرحباً {{ current_user.full_name or current_user.username if current_user.is_authenticated else 'زائر' }}</h2>
                 <div>
-                    <a href="/profile" class="btn btn-outline-primary">الملف الشخصي</a>
-                    <a href="/messages" class="btn btn-outline-info position-relative">
-                        الرسائل
-                        {% if unread > 0 %}
-                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">{{ unread }}</span>
-                        {% endif %}
-                    </a>
-                    <a href="/logout" class="btn btn-danger">تسجيل خروج</a>
+                    {% if current_user.is_authenticated %}
+                        <a href="/profile" class="btn btn-outline-primary">الملف الشخصي</a>
+                        <a href="/messages" class="btn btn-outline-info position-relative">
+                            الرسائل
+                            {% if unread > 0 %}
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">{{ unread }}</span>
+                            {% endif %}
+                        </a>
+                        <a href="/logout" class="btn btn-danger">تسجيل خروج</a>
+                    {% else %}
+                        <a href="/login" class="btn btn-primary">تسجيل الدخول</a>
+                        <a href="/register" class="btn btn-success">تسجيل جديد</a>
+                    {% endif %}
                 </div>
             </div>
             
             <!-- رسالة ترحيبية وتحذيرية -->
             <div class="alert alert-info">
                 <p>إذا كنت تريد إصلاح شيء في منزلك أو كنت في شركة تبحث عن حرفي، انشر طلبك وسيراه الحرفيون القريبون منك.</p>
+                {% if not current_user.is_authenticated %}
                 <p class="mb-0 text-danger"><strong>سجل أولاً لتتمكن من نشر الطلبات وإرسال الرسائل.</strong></p>
+                {% endif %}
             </div>
             
-            <!-- أزرار الإجراءات السريعة -->
+            <!-- أزرار الإجراءات السريعة - كلها توجه إلى تسجيل الدخول إذا كان غير مسجل -->
             <div class="action-btn-group">
-                <a href="/post-request" class="action-btn primary">أنا صاحب منزل أحتاج معلم</a>
-                <a href="/post-request" class="action-btn success">أنا صاحب شركة أحتاج مقاول</a>
-                <a href="/post-request" class="action-btn warning">أنا مقاول أحتاج معلم</a>
-                <a href="/post-request" class="action-btn info">أنا معلم أحتاج مساعد أو خدام</a>
+                <a href="{{ url_for('post_request') if current_user.is_authenticated else url_for('login') }}" class="action-btn primary">أنا صاحب منزل أحتاج معلم</a>
+                <a href="{{ url_for('post_request') if current_user.is_authenticated else url_for('login') }}" class="action-btn success">أنا صاحب شركة أحتاج مقاول</a>
+                <a href="{{ url_for('post_request') if current_user.is_authenticated else url_for('login') }}" class="action-btn warning">أنا مقاول أحتاج معلم</a>
+                <a href="{{ url_for('post_request') if current_user.is_authenticated else url_for('login') }}" class="action-btn info">أنا معلم أحتاج مساعد أو خدام</a>
             </div>
             
             <div class="action-btn-group">
                 <a href="/search" class="action-btn primary">جميع الطلبات في المغرب</a>
+                {% if current_user.is_authenticated %}
                 <a href="/search?district={{ current_user.district }}&specialty={{ current_user.specialty }}" class="action-btn success">طلبات في مدينتي وتخصصي</a>
+                {% else %}
+                <a href="/login" class="action-btn success">طلبات في مدينتي وتخصصي (سجل أولاً)</a>
+                {% endif %}
             </div>
             
             <hr>
             
-            <!-- طلباتي -->
+            {% if current_user.is_authenticated %}
+            <!-- طلباتي (للمستخدم المسجل) -->
             <h3>طلباتي</h3>
             <div class="row">
                 {% for req in my_requests %}
@@ -578,439 +502,53 @@ def dashboard():
                     </div>
                 </div>
                 {% else %}
-                <p class="text-muted">لا توجد طلبات بعد. انشر طلبك الآن!</p>
+                <p class="text-muted">لا توجد طلبات لك. انشر طلبك الآن!</p>
+                {% endfor %}
+            </div>
+            <hr>
+            {% endif %}
+            
+            <!-- جميع الطلبات المفتوحة (تظهر للجميع) -->
+            <h3>{{ 'الطلبات المفتوحة' if current_user.is_authenticated else 'أحدث الطلبات في المغرب' }}</h3>
+            <div class="row">
+                {% for req in all_requests %}
+                <div class="col-md-6">
+                    <div class="request-card">
+                        <h5>{{ req.title }}</h5>
+                        <p>{{ req.description[:100] }}...</p>
+                        <p><strong>التخصص:</strong> {{ req.specialty }}</p>
+                        <p><strong>الحي:</strong> {{ req.district }}</p>
+                        <p><strong>نشر:</strong> {{ time_ago(req.created_at) }}</p>
+                        <p><strong>عروض:</strong> {{ req.offers_count }}/30</p>
+                        <a href="/view-offers/{{ req.id }}" class="btn btn-sm btn-primary">عرض التفاصيل</a>
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-muted">لا توجد طلبات مفتوحة حالياً.</p>
                 {% endfor %}
             </div>
         </div>
     </body>
     </html>
-    ''', my_requests=my_requests, open_requests=open_requests, unread=unread, total_clients=total_clients, total_artisans=total_artisans)
+    ''',
+    total_clients=total_clients,
+    total_artisans=total_artisans,
+    total_requests=total_requests,
+    all_requests=all_requests,
+    my_requests=my_requests,
+    unread=unread
+    )
 
-# ================== ملف شخصي (مع تحسينات الحذف) ==================
-@app.route('/profile', methods=['GET','POST'])
-@login_required
-def profile():
-    if request.method == 'POST':
-        # حذف الصورة الشخصية
-        if 'delete_profile_image' in request.form:
-            if current_user.profile_image and current_user.profile_image.startswith('/uploads/'):
-                delete_file(current_user.profile_image)
-            current_user.profile_image = None
-            db.session.commit()
-            flash('تم حذف الصورة الشخصية', 'success')
-            return redirect(url_for('profile'))
-        
-        # حذف صورة من الأعمال (portfolio)
-        if request.form.get('action') == 'delete_portfolio':
-            img_to_delete = request.form.get('delete_image')
-            if img_to_delete and current_user.portfolio:
-                urls = current_user.portfolio.split(',')
-                if img_to_delete in urls:
-                    urls.remove(img_to_delete)
-                    if img_to_delete.startswith('/uploads/'):
-                        delete_file(img_to_delete)
-                    current_user.portfolio = ','.join(urls) if urls else None
-                    db.session.commit()
-                    flash('تم حذف الصورة', 'success')
-            return redirect(url_for('profile'))
-        
-        # حالة رفع صورة فقط (من زر تغيير الصورة)
-        if 'profile_image' in request.files and len(request.form) == 0:
-            file = request.files['profile_image']
-            if file and file.filename:
-                if current_user.profile_image and current_user.profile_image.startswith('/uploads/'):
-                    delete_file(current_user.profile_image)
-                url = save_file_to_local(file, subfolder=f"users/{current_user.id}")
-                if url:
-                    current_user.profile_image = url
-                    db.session.commit()
-                    flash('تم تحديث الصورة الشخصية')
-            return redirect(url_for('profile'))
-
-        # تحديث البيانات العامة
-        current_user.full_name = request.form['full_name']
-        current_user.district = normalize_city(request.form['district'])
-
-        # رفع صورة شخصية جديدة (إذا وجدت مع البيانات)
-        if 'profile_image' in request.files:
-            file = request.files['profile_image']
-            if file and file.filename:
-                if current_user.profile_image and current_user.profile_image.startswith('/uploads/'):
-                    delete_file(current_user.profile_image)
-                url = save_file_to_local(file, subfolder=f"users/{current_user.id}")
-                if url:
-                    current_user.profile_image = url
-
-        # معالجة بيانات الحرفي
-        if current_user.user_type == 'artisan':
-            current_user.specialty = request.form.get('specialty', current_user.specialty)
-            exp = request.form.get('experience_years', '').strip()
-            if exp and exp.isdigit():
-                current_user.experience_years = int(exp)
-
-            if 'video_work' in request.files:
-                file = request.files['video_work']
-                if file and file.filename:
-                    if current_user.video_work and current_user.video_work.startswith('/uploads/'):
-                        delete_file(current_user.video_work)
-                    url = save_file_to_local(file, subfolder=f"artisans/{current_user.id}")
-                    if url:
-                        current_user.video_work = url
-
-            if 'new_portfolio' in request.files:
-                files = request.files.getlist('new_portfolio')
-                if files and files[0].filename:
-                    urls = save_multiple_files(files, subfolder=f"artisans/{current_user.id}/portfolio")
-                    if urls:
-                        old = current_user.portfolio.split(',') if current_user.portfolio else []
-                        all_urls = old + urls.split(',')
-                        current_user.portfolio = ','.join(all_urls)
-
-        db.session.commit()
-        flash('تم تحديث الملف الشخصي')
-        return redirect(url_for('profile'))
-
-    # عرض الملف الشخصي
-    avg_rating = 0
-    num_ratings = 0
-    portfolio_list = []
-    if current_user.user_type == 'artisan':
-        avg_rating, num_ratings = get_artisan_rating(current_user.id)
-        if current_user.portfolio:
-            portfolio_list = current_user.portfolio.split(',')
-
-    return render_template_string('''
-    <!DOCTYPE html><html dir="rtl"><head><title>الملف الشخصي</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        .stats-mini{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.7);color:#fff;padding:5px 10px;border-radius:20px;font-size:12px;z-index:9999;opacity:0.6;}
-        .profile-header{background:#fff;border-radius:15px;padding:20px;box-shadow:0 2px 10px rgba(0,0,0,0.1);margin-bottom:20px;text-align:center;}
-        .profile-img{width:120px;height:120px;border-radius:50%;object-fit:cover;border:3px solid #007bff;}
-        .rating-stars{color:#ffc107;font-size:1.2rem;}
-        .portfolio-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:15px;}
-        .portfolio-item{position:relative;border-radius:10px;overflow:hidden;box-shadow:0 2px 5px rgba(0,0,0,0.1);}
-        .portfolio-img{width:100%;height:150px;object-fit:cover;}
-        .delete-btn{position:absolute;top:5px;right:5px;background:rgba(255,0,0,0.7);color:white;border:none;border-radius:50%;width:30px;height:30px;cursor:pointer;}
-        .image-action-btn{margin:5px;}
-    </style></head>
-    <body>
-    <div class="stats-mini">👥 {{ User.query.count() }} | 🔨 {{ User.query.filter_by(user_type='artisan').count() }}</div>
-    <div class="container mt-5" style="max-width:800px;">
-        <div class="profile-header">
-            <img src="{{ current_user.profile_image or '/uploads/placeholder.jpg' }}" class="profile-img mb-3">
-            <div>
-                {% if current_user.profile_image %}
-                <form method="POST" enctype="multipart/form-data" style="display:inline;" id="changePhotoForm">
-                    <input type="file" name="profile_image" id="profile_image" accept="image/*" style="display:none;" onchange="document.getElementById('changePhotoForm').submit();">
-                    <button type="button" class="btn btn-sm btn-outline-primary image-action-btn" onclick="document.getElementById('profile_image').click();">تغيير الصورة</button>
-                </form>
-                <!-- زر حذف الصورة الشخصية -->
-                <form method="POST" style="display:inline;" onsubmit="return confirm('هل أنت متأكد من حذف الصورة الشخصية؟');">
-                    <input type="hidden" name="delete_profile_image" value="yes">
-                    <button type="submit" class="btn btn-sm btn-outline-danger image-action-btn">🗑️ حذف الصورة</button>
-                </form>
-                {% else %}
-                <form method="POST" enctype="multipart/form-data" style="display:inline;" id="addPhotoForm">
-                    <input type="file" name="profile_image" id="profile_image_add" accept="image/*" style="display:none;" onchange="document.getElementById('addPhotoForm').submit();">
-                    <button type="button" class="btn btn-sm btn-success image-action-btn" onclick="document.getElementById('profile_image_add').click();">إضافة صورة</button>
-                </form>
-                {% endif %}
-            </div>
-            <h2 class="mt-2">{{ current_user.full_name or current_user.username }}</h2>
-            <p class="text-muted">{{ current_user.district or 'غير محدد' }}</p>
-            {% if current_user.user_type == 'artisan' %}
-                <p class="text-muted">{{ current_user.specialty }} {% if current_user.experience_years %} - خبرة {{ current_user.experience_years }} سنة{% endif %}</p>
-                {% if num_ratings > 0 %}<div class="rating-stars">{% for i in range(5) %}{% if i < avg_rating|int %}★{% else %}☆{% endif %}{% endfor %} ({{ num_ratings }})</div>{% endif %}
-            {% endif %}
-            <p class="joined">انضم {{ time_ago(current_user.created_at) }}</p>
-        </div>
-
-        <button class="btn btn-primary mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#editForm">تعديل البيانات</button>
-        <div class="collapse" id="editForm"><div class="card card-body"><form method="POST" enctype="multipart/form-data">
-            <div class="mb-3"><label>الاسم الكامل</label><input type="text" name="full_name" value="{{ current_user.full_name }}" class="form-control" required></div>
-            <div class="mb-3"><label>مدينتك الحالية</label><input type="text" name="district" value="{{ current_user.district }}" class="form-control" required></div>
-            {% if current_user.user_type == 'artisan' %}
-            <div class="mb-3"><label>التخصص</label><select name="specialty" class="form-select">{% for val in ['بلومبي','نجار','سباك','كهربائي','رسام','حدائق','جباص','المنيوم','جلايجي','كباص'] %}<option value="{{ val }}" {% if current_user.specialty == val %}selected{% endif %}>{{ val }}</option>{% endfor %}</select></div>
-            <div class="mb-3"><label>سنوات الخبرة</label><input type="number" name="experience_years" class="form-control" value="{{ current_user.experience_years or '' }}"></div>
-            <div class="mb-3"><label>فيديو العمل</label><input type="file" name="video_work" class="form-control" accept="video/*"></div>
-            <div class="mb-3"><label>إضافة صور أعمال جديدة</label><input type="file" name="new_portfolio" class="form-control" accept="image/*" multiple></div>
-            {% endif %}
-            <button type="submit" class="btn btn-primary">حفظ</button>
-        </form></div></div>
-
-        {% if current_user.user_type == 'artisan' and portfolio_list %}
-        <div class="portfolio-section"><h3 class="mb-3">📸 أعمالي</h3><div class="portfolio-grid">
-            {% for img in portfolio_list %}
-            <div class="portfolio-item">
-                <img src="{{ img }}" class="portfolio-img" onclick="openModal('{{ img }}')">
-                <form method="POST" style="display:inline;" onsubmit="return confirm('هل أنت متأكد من حذف هذه الصورة؟');">
-                    <input type="hidden" name="delete_image" value="{{ img }}">
-                    <input type="hidden" name="action" value="delete_portfolio">
-                    <button type="submit" class="delete-btn" title="حذف">×</button>
-                </form>
-            </div>
-            {% endfor %}
-        </div></div>
-        {% endif %}
-
-        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary mt-3">العودة للرئيسية</a>
-    </div>
-    <div class="modal fade" id="imageModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-body"><img src="" id="modalImage" style="width:100%;"></div></div></div></div>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>function openModal(src){ document.getElementById('modalImage').src = src; new bootstrap.Modal(document.getElementById('imageModal')).show(); }</script>
-    </body></html>''', current_user=current_user, avg_rating=avg_rating, num_ratings=num_ratings, portfolio_list=portfolio_list, User=User)
-
-# ================== الدردشة (كما هي مع إضافة تحذير) ==================
-@app.route('/chat/<int:chat_id>', methods=['GET','POST'])
-@login_required
-def view_chat(chat_id):
-    chat = Chat.query.get_or_404(chat_id)
-    if current_user.id not in [chat.client_id, chat.artisan_id] and not is_admin_user(current_user):
-        return redirect(url_for('index'))
-    other = User.query.get(chat.artisan_id if current_user.id == chat.client_id else chat.client_id)
-
-    # معالجة حذف صورة من رسالة
-    if request.method == 'POST' and request.form.get('action') == 'delete_message_image':
-        msg_id = request.form.get('message_id')
-        img_url = request.form.get('image_url')
-        if msg_id and img_url:
-            # التحقق من أن المستخدم هو مالك الرسالة
-            msg = Message.query.get(msg_id)
-            if msg and msg.sender_id == current_user.id:
-                delete_message_image(msg_id, img_url)
-                flash('تم حذف الصورة', 'success')
-        return redirect(url_for('view_chat', chat_id=chat_id))
-
-    if request.method == 'POST' and request.form.get('action') != 'delete_message_image':
-        content = request.form.get('message', '')
-        if contains_blocked_patterns(content):
-            flash('الرسالة تحتوي على رقم هاتف أو رابط تواصل ممنوع')
-            return redirect(url_for('view_chat', chat_id=chat_id))
-
-        images = voice = video = ''
-        if 'images' in request.files:
-            files = request.files.getlist('images')
-            if files and files[0].filename:
-                images = save_multiple_files(files, subfolder=f"chats/{chat_id}")
-                print(f"📸 تم رفع صور: {images}")
-        if 'voice' in request.files:
-            f = request.files['voice']
-            if f and f.filename:
-                voice = save_file_to_local(f, subfolder=f"chats/{chat_id}")
-                print(f"🎤 تم رفع صوت: {voice}")
-        if 'video' in request.files:
-            f = request.files['video']
-            if f and f.filename:
-                video = save_file_to_local(f, subfolder=f"chats/{chat_id}")
-                print(f"🎥 تم رفع فيديو: {video}")
-
-        msg = Message(chat_id=chat_id, sender_id=current_user.id, content=content, images=images, voice=voice, video=video)
-        db.session.add(msg)
-        db.session.commit()
-        return redirect(url_for('view_chat', chat_id=chat_id))
-
-    messages = Message.query.filter_by(chat_id=chat_id).order_by(Message.created_at).all()
-    for m in messages:
-        if m.sender_id != current_user.id and not m.is_read:
-            m.is_read = True
-    db.session.commit()
-
-    return render_template_string('''
-    <!DOCTYPE html><html dir="rtl"><head><title>محادثة مع {{ other.full_name or other.username }}</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        .stats-mini{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.7);color:#fff;padding:5px 10px;border-radius:20px;font-size:12px;z-index:9999;opacity:0.6;}
-        .message-container{height:400px;overflow-y:scroll;border:1px solid #ddd;padding:10px;background:#f9f9f9;margin-bottom:10px;}
-        .my-message{background-color:#007bff;color:white;margin-left:auto;padding:8px 12px;border-radius:15px;max-width:70%;margin-bottom:5px;clear:both;float:right;text-align:right;}
-        .other-message{background-color:#e9ecef;color:black;padding:8px 12px;border-radius:15px;max-width:70%;margin-bottom:5px;clear:both;float:left;text-align:right;}
-        .message-wrapper{width:100%;overflow:hidden;margin-bottom:10px;}
-        .action-btn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:#f0f0f0;color:#333;text-decoration:none;margin-left:5px;cursor:pointer;border:none;}
-        .action-btn:hover{background:#ddd;}
-        .media-preview{max-width:100%;max-height:200px;margin-top:5px;border-radius:5px;}
-        .delete-image-btn{position:absolute;top:0;right:0;background:rgba(255,0,0,0.7);color:white;border:none;border-radius:50%;width:25px;height:25px;font-size:16px;line-height:1;cursor:pointer;}
-        .image-container{position:relative;display:inline-block;margin:5px;}
-        .instruction-section{margin-top:30px;padding-top:20px;border-top:2px solid #ddd;clear:both;}
-        .instruction-img{width:100%;max-height:400px;object-fit:contain;border:1px solid #ddd;border-radius:5px;cursor:pointer;}
-        .warning-text{color:#dc3545;font-size:0.9rem;margin-bottom:5px;text-align:center;}
-    </style></head>
-    <body>
-    <div class="stats-mini">👥 {{ User.query.count() }} | 🔨 {{ User.query.filter_by(user_type='artisan').count() }}</div>
-    <div class="container mt-5" style="max-width:600px;">
-        <div class="d-flex align-items-center justify-content-between mb-3">
-            <div class="d-flex align-items-center">
-                <img src="{{ other.profile_image or '/uploads/placeholder.jpg' }}" style="width:50px;height:50px;border-radius:50%; object-fit:cover; margin-left:10px;">
-                <h4><a href="/user/{{ other.id }}">{{ other.full_name or other.username }}</a></h4>
-            </div>
-        </div>
-        
-        <!-- منطقة عرض الرسائل -->
-        <div class="message-container" id="messageContainer">
-            {% for m in messages %}
-                <div class="message-wrapper">
-                    {% if m.is_blocked %}
-                        <div class="blocked-message text-center p-2 bg-danger text-white rounded">[هذه الرسالة محظورة]</div>
-                    {% else %}
-                        <div class="{% if m.sender_id == current_user.id %}my-message{% else %}other-message{% endif %}">
-                            <div class="message-content">
-                                {% if m.content and (m.content.startswith('https://www.google.com/maps?q=') or m.content.startswith('https://maps.app.goo.gl/') or 'maps.google.com' in m.content) %}
-                                    <a href="{{ m.content }}" target="_blank" style="color: {% if m.sender_id == current_user.id %}white{% else %}blue{% endif %};">📍 موقع على الخريطة</a>
-                                {% elif m.content %}
-                                    {{ m.content }}
-                                {% endif %}
-                            </div>
-                            {% if m.images %}
-                                <div style="display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; justify-content: {% if m.sender_id == current_user.id %}flex-end{% else %}flex-start{% endif %};">
-                                    {% for img in m.images.split(',') %}
-                                        <div class="image-container">
-                                            <a href="{{ img }}" target="_blank">
-                                                <img src="{{ img }}" class="media-preview" style="width:100px; height:100px; object-fit:cover;">
-                                            </a>
-                                            {% if m.sender_id == current_user.id %}
-                                                <form method="POST" style="display:inline;" onsubmit="return confirm('هل أنت متأكد من حذف هذه الصورة؟');">
-                                                    <input type="hidden" name="action" value="delete_message_image">
-                                                    <input type="hidden" name="message_id" value="{{ m.id }}">
-                                                    <input type="hidden" name="image_url" value="{{ img }}">
-                                                    <button type="submit" class="delete-image-btn" title="حذف الصورة">×</button>
-                                                </form>
-                                            {% endif %}
-                                        </div>
-                                    {% endfor %}
-                                </div>
-                            {% endif %}
-                            {% if m.voice %}
-                                <audio controls src="{{ m.voice }}" style="width:100%; margin-top:5px;"></audio>
-                            {% endif %}
-                            {% if m.video %}
-                                <video controls src="{{ m.video }}" style="max-width:100%; max-height:200px; margin-top:5px;"></video>
-                            {% endif %}
-                        </div>
-                    {% endif %}
-                </div>
-            {% endfor %}
-        </div>
-
-        <!-- منطقة إرسال الرسائل والأزرار -->
-        <form method="POST" enctype="multipart/form-data" id="chatForm">
-            <div class="warning-text">⚠️ يمنع مشاركة أرقام الهاتف، سيتم رفض أي رسالة تحتوي على رقم.</div>
-            <div class="mb-2"><textarea name="message" class="form-control" placeholder="اكتب رسالتك..." rows="2" id="messageText"></textarea></div>
-            <div class="d-flex align-items-center gap-2 mb-2">
-                <button type="submit" class="btn btn-primary flex-grow-1">💬 إرسال</button>
-                <label for="images" class="action-btn">🖼️</label><input type="file" name="images" id="images" accept="image/*" multiple style="display: none;" onchange="document.getElementById('chatForm').submit();">
-                <label for="video" class="action-btn">◀️</label><input type="file" name="video" id="video" accept="video/*" style="display: none;" onchange="document.getElementById('chatForm').submit();">
-                <label for="voice" class="action-btn">🔊</label><input type="file" name="voice" id="voice" accept="audio/*" style="display: none;" onchange="document.getElementById('chatForm').submit();">
-                <button type="button" class="action-btn" id="smartLocationBtn" title="مشاركة موقعي">📍</button>
-            </div>
-            <!-- منطقة لصق رابط الموقع (تظهر عند الضغط على زر الموقع) -->
-            <div id="locationResultArea" style="display: none; margin-bottom: 10px;" class="p-2 border rounded">
-                <div class="input-group">
-                    <input type="text" id="manualLocationLink" class="form-control" placeholder="الصق رابط الموقع هنا">
-                    <button class="btn btn-primary" type="button" id="useLocationLink">إضافة</button>
-                </div>
-                <small class="text-muted">بعد لصق الرابط، اضغط "إضافة" ليظهر في رسالتك.</small>
-            </div>
-        </form>
-        
-        <!-- منطقة الصورة التعليمية (منفصلة) -->
-        <div class="instruction-section">
-            <div class="mt-3 text-center">
-                <img src="{{ url_for('static', filename='instruction.jpg') }}?v={{ range(1, 1000) | random }}" 
-                     alt="تعليمات إرسال الموقع" 
-                     class="instruction-img"
-                     onclick="openModal(this.src)">
-                <p class="text-muted small mt-1">تعليمات إرسال الموقع: اضغط على زر الموقع، افتح الخريطة، انسخ الرابط والصقه.</p>
-            </div>
-            
-            <!-- زر رفع الصورة للمسؤول (يظهر فقط للأدمن) -->
-            {% if current_user.is_admin %}
-            <div class="mt-2 p-3 bg-light rounded border">
-                <h6>رفع صورة تعليمية جديدة</h6>
-                <form method="POST" action="{{ url_for('upload_instruction_image') }}" enctype="multipart/form-data" class="d-flex align-items-center gap-2">
-                    <input type="file" name="instruction_image" accept="image/*" class="form-control form-control-sm" style="width: auto;" required>
-                    <button type="submit" class="btn btn-sm btn-success">➕ رفع الصورة</button>
-                </form>
-                <small class="text-muted">هذه الصورة ستظهر لجميع المستخدمين.</small>
-            </div>
-            {% endif %}
-        </div>
-
-        <!-- Modal لتكبير الصور -->
-        <div class="modal fade" id="imageModal" tabindex="-1">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-body">
-                        <img src="" id="modalImage" style="width:100%;">
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <script>
-        var container = document.getElementById('messageContainer');
-        container.scrollTop = container.scrollHeight;
-
-        document.getElementById('smartLocationBtn').addEventListener('click', function() {
-            window.open('https://maps.google.com', '_blank');
-            document.getElementById('locationResultArea').style.display = 'block';
-        });
-
-        document.getElementById('useLocationLink').addEventListener('click', function() {
-            const link = document.getElementById('manualLocationLink').value.trim();
-            if (link) {
-                const msgField = document.getElementById('messageText');
-                msgField.value += (msgField.value ? '\\n' : '') + link;
-                document.getElementById('manualLocationLink').value = '';
-                document.getElementById('locationResultArea').style.display = 'none';
-            } else {
-                alert('الرجاء لصق الرابط أولاً.');
-            }
-        });
-
-        function openModal(src) {
-            document.getElementById('modalImage').src = src;
-            var modal = new bootstrap.Modal(document.getElementById('imageModal'));
-            modal.show();
-        }
-        </script>
-    </div></body></html>''', messages=messages, other=other, User=User)
-
-# ================== رفع الصورة التعليمية (للمسؤول فقط) ==================
-@app.route('/upload-instruction-image', methods=['POST'])
-@login_required
-@admin_required
-def upload_instruction_image():
-    if 'instruction_image' not in request.files:
-        flash('لم يتم اختيار ملف', 'danger')
-        return redirect(request.referrer or url_for('index'))
-    file = request.files['instruction_image']
-    if file.filename == '':
-        flash('الملف فارغ', 'danger')
-        return redirect(request.referrer or url_for('index'))
-    if file and allowed_file(file.filename):
-        try:
-            filename = 'instruction.jpg'
-            filepath = os.path.join(STATIC_FOLDER, filename)
-            if os.path.exists(filepath):
-                os.remove(filepath)
-            file.save(filepath)
-            flash('✅ تم رفع الصورة التعليمية بنجاح', 'success')
-            print(f"✅ تم حفظ الصورة التعليمية في: {filepath}")
-        except Exception as e:
-            flash(f'❌ خطأ في حفظ الصورة: {str(e)}', 'danger')
-            print(f"❌ خطأ في رفع الصورة التعليمية: {e}")
-    else:
-        flash('نوع الملف غير مسموح به', 'danger')
-    return redirect(request.referrer or url_for('index'))
-
-# ================== تسجيل الخروج ==================
+# ================== تسجيل الخروج (يبقى كما هو) ==================
 @app.route('/logout')
 @login_required
 def logout():
     logout_user()
     return redirect(url_for('index'))
 
-print("✅ الجزء الأول من المسارات (الرئيسية، الملف الشخصي، الدردشة، الداشبورد) تم تحميله بنجاح.")
+print("✅ الجزء الأول من المسارات تم تحميله بنجاح.")
 print("✅ أضف الآن الجزء الثاني (باقي المسارات) لإكمال الموقع.")# ============================================================
-# الجزء الثاني: جميع المسارات المتبقية مع تحسينات التسجيل والملف الشخصي
+# الجزء الثاني: جميع المسارات المتبقية
 # ============================================================
 
 # قائمة شاملة لمدن المغرب (للاستخدام في التسجيل وإكمال الملف الشخصي)
@@ -1053,7 +591,7 @@ def login():
             # التحقق من اكتمال الملف الشخصي
             if not user.profile_completed:
                 return redirect(url_for('complete_profile'))
-            return redirect(url_for('dashboard'))
+            return redirect(url_for('index'))  # العودة للصفحة الرئيسية الموحدة
         flash('البريد أو كلمة المرور غير صحيحة')
     return render_template_string('''
     <!DOCTYPE html><html dir="rtl"><head><title>تسجيل الدخول</title>
@@ -1140,9 +678,9 @@ def register():
 def complete_profile():
     if is_admin_user(current_user):
         return redirect(url_for('admin_dashboard'))
-    # إذا كان الملف مكتملاً بالفعل، نوجه إلى الداشبورد
+    # إذا كان الملف مكتملاً بالفعل، نوجه إلى الصفحة الرئيسية
     if current_user.profile_completed:
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('index'))
     
     if request.method == 'POST':
         full_name = request.form.get('full_name', '').strip()
@@ -1186,7 +724,7 @@ def complete_profile():
         
         db.session.commit()
         flash('تم إكمال الملف الشخصي بنجاح')
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('index'))
     
     # عرض النموذج مع القوائم
     return render_template_string('''
@@ -1360,6 +898,184 @@ def public_profile(user_id):
     <script>function openModal(src){ document.getElementById('modalImage').src = src; new bootstrap.Modal(document.getElementById('imageModal')).show(); } function openVideo(src){ window.open(src, '_blank'); }</script>
     </body></html>''', user=user, avg_rating=avg_rating, num_ratings=num_ratings, ratings=ratings, portfolio_list=portfolio_list, User=User)
 
+# ================== الملف الشخصي للمستخدم نفسه (مع تحسينات) ==================
+@app.route('/profile', methods=['GET','POST'])
+@login_required
+def profile():
+    if request.method == 'POST':
+        # حذف الصورة الشخصية
+        if 'delete_profile_image' in request.form:
+            if current_user.profile_image and current_user.profile_image.startswith('/uploads/'):
+                delete_file(current_user.profile_image)
+            current_user.profile_image = None
+            db.session.commit()
+            flash('تم حذف الصورة الشخصية', 'success')
+            return redirect(url_for('profile'))
+        
+        # حذف صورة من الأعمال (portfolio)
+        if request.form.get('action') == 'delete_portfolio':
+            img_to_delete = request.form.get('delete_image')
+            if img_to_delete and current_user.portfolio:
+                urls = current_user.portfolio.split(',')
+                if img_to_delete in urls:
+                    urls.remove(img_to_delete)
+                    if img_to_delete.startswith('/uploads/'):
+                        delete_file(img_to_delete)
+                    current_user.portfolio = ','.join(urls) if urls else None
+                    db.session.commit()
+                    flash('تم حذف الصورة', 'success')
+            return redirect(url_for('profile'))
+        
+        # حالة رفع صورة فقط (من زر تغيير الصورة)
+        if 'profile_image' in request.files and len(request.form) == 0:
+            file = request.files['profile_image']
+            if file and file.filename:
+                if current_user.profile_image and current_user.profile_image.startswith('/uploads/'):
+                    delete_file(current_user.profile_image)
+                url = save_file_to_local(file, subfolder=f"users/{current_user.id}")
+                if url:
+                    current_user.profile_image = url
+                    db.session.commit()
+                    flash('تم تحديث الصورة الشخصية')
+            return redirect(url_for('profile'))
+
+        # تحديث البيانات العامة
+        current_user.full_name = request.form['full_name']
+        current_user.district = normalize_city(request.form['district'])
+        if 'phone' in request.form:
+            current_user.phone = request.form['phone']
+
+        # رفع صورة شخصية جديدة (إذا وجدت مع البيانات)
+        if 'profile_image' in request.files:
+            file = request.files['profile_image']
+            if file and file.filename:
+                if current_user.profile_image and current_user.profile_image.startswith('/uploads/'):
+                    delete_file(current_user.profile_image)
+                url = save_file_to_local(file, subfolder=f"users/{current_user.id}")
+                if url:
+                    current_user.profile_image = url
+
+        # معالجة بيانات الحرفي
+        if current_user.user_type == 'artisan':
+            current_user.specialty = request.form.get('specialty', current_user.specialty)
+            exp = request.form.get('experience_years', '').strip()
+            if exp and exp.isdigit():
+                current_user.experience_years = int(exp)
+
+            if 'video_work' in request.files:
+                file = request.files['video_work']
+                if file and file.filename:
+                    if current_user.video_work and current_user.video_work.startswith('/uploads/'):
+                        delete_file(current_user.video_work)
+                    url = save_file_to_local(file, subfolder=f"artisans/{current_user.id}")
+                    if url:
+                        current_user.video_work = url
+
+            if 'new_portfolio' in request.files:
+                files = request.files.getlist('new_portfolio')
+                if files and files[0].filename:
+                    urls = save_multiple_files(files, subfolder=f"artisans/{current_user.id}/portfolio")
+                    if urls:
+                        old = current_user.portfolio.split(',') if current_user.portfolio else []
+                        all_urls = old + urls.split(',')
+                        current_user.portfolio = ','.join(all_urls)
+
+        db.session.commit()
+        flash('تم تحديث الملف الشخصي')
+        return redirect(url_for('profile'))
+
+    # عرض الملف الشخصي
+    avg_rating = 0
+    num_ratings = 0
+    portfolio_list = []
+    if current_user.user_type == 'artisan':
+        avg_rating, num_ratings = get_artisan_rating(current_user.id)
+        if current_user.portfolio:
+            portfolio_list = current_user.portfolio.split(',')
+
+    return render_template_string('''
+    <!DOCTYPE html><html dir="rtl"><head><title>الملف الشخصي</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .stats-mini{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.7);color:#fff;padding:5px 10px;border-radius:20px;font-size:12px;z-index:9999;opacity:0.6;}
+        .profile-header{background:#fff;border-radius:15px;padding:20px;box-shadow:0 2px 10px rgba(0,0,0,0.1);margin-bottom:20px;text-align:center;}
+        .profile-img{width:120px;height:120px;border-radius:50%;object-fit:cover;border:3px solid #007bff;}
+        .rating-stars{color:#ffc107;font-size:1.2rem;}
+        .portfolio-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:15px;}
+        .portfolio-item{position:relative;border-radius:10px;overflow:hidden;box-shadow:0 2px 5px rgba(0,0,0,0.1);}
+        .portfolio-img{width:100%;height:150px;object-fit:cover;}
+        .delete-btn{position:absolute;top:5px;right:5px;background:rgba(255,0,0,0.7);color:white;border:none;border-radius:50%;width:30px;height:30px;cursor:pointer;}
+        .image-action-btn{margin:5px;}
+    </style></head>
+    <body>
+    <div class="stats-mini">👥 {{ User.query.count() }} | 🔨 {{ User.query.filter_by(user_type='artisan').count() }}</div>
+    <div class="container mt-5" style="max-width:800px;">
+        <div class="profile-header">
+            <img src="{{ current_user.profile_image or '/uploads/placeholder.jpg' }}" class="profile-img mb-3">
+            <div>
+                {% if current_user.profile_image %}
+                <form method="POST" enctype="multipart/form-data" style="display:inline;" id="changePhotoForm">
+                    <input type="file" name="profile_image" id="profile_image" accept="image/*" style="display:none;" onchange="document.getElementById('changePhotoForm').submit();">
+                    <button type="button" class="btn btn-sm btn-outline-primary image-action-btn" onclick="document.getElementById('profile_image').click();">تغيير الصورة</button>
+                </form>
+                <!-- زر حذف الصورة الشخصية -->
+                <form method="POST" style="display:inline;" onsubmit="return confirm('هل أنت متأكد من حذف الصورة الشخصية؟');">
+                    <input type="hidden" name="delete_profile_image" value="yes">
+                    <button type="submit" class="btn btn-sm btn-outline-danger image-action-btn">🗑️ حذف الصورة</button>
+                </form>
+                {% else %}
+                <form method="POST" enctype="multipart/form-data" style="display:inline;" id="addPhotoForm">
+                    <input type="file" name="profile_image" id="profile_image_add" accept="image/*" style="display:none;" onchange="document.getElementById('addPhotoForm').submit();">
+                    <button type="button" class="btn btn-sm btn-success image-action-btn" onclick="document.getElementById('profile_image_add').click();">إضافة صورة</button>
+                </form>
+                {% endif %}
+            </div>
+            <h2 class="mt-2">{{ current_user.full_name or current_user.username }}</h2>
+            <p class="text-muted">{{ current_user.district or 'غير محدد' }}</p>
+            <p class="text-muted">📞 {{ current_user.phone or 'رقم غير متوفر' }}</p>
+            {% if current_user.user_type == 'artisan' %}
+                <p class="text-muted">{{ current_user.specialty }} {% if current_user.experience_years %} - خبرة {{ current_user.experience_years }} سنة{% endif %}</p>
+                {% if num_ratings > 0 %}<div class="rating-stars">{% for i in range(5) %}{% if i < avg_rating|int %}★{% else %}☆{% endif %}{% endfor %} ({{ num_ratings }})</div>{% endif %}
+            {% endif %}
+            <p class="joined">انضم {{ time_ago(current_user.created_at) }}</p>
+        </div>
+
+        <button class="btn btn-primary mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#editForm">تعديل البيانات</button>
+        <div class="collapse" id="editForm"><div class="card card-body"><form method="POST" enctype="multipart/form-data">
+            <div class="mb-3"><label>الاسم الكامل</label><input type="text" name="full_name" value="{{ current_user.full_name }}" class="form-control" required></div>
+            <div class="mb-3"><label>رقم الهاتف</label><input type="text" name="phone" value="{{ current_user.phone }}" class="form-control" required></div>
+            <div class="mb-3"><label>مدينتك الحالية</label><input type="text" name="district" value="{{ current_user.district }}" class="form-control" required></div>
+            {% if current_user.user_type == 'artisan' %}
+            <div class="mb-3"><label>التخصص</label><select name="specialty" class="form-select">{% for val in SPECIALTIES %}<option value="{{ val }}" {% if current_user.specialty == val %}selected{% endif %}>{{ val }}</option>{% endfor %}</select></div>
+            <div class="mb-3"><label>سنوات الخبرة</label><input type="number" name="experience_years" class="form-control" value="{{ current_user.experience_years or '' }}"></div>
+            <div class="mb-3"><label>فيديو العمل</label><input type="file" name="video_work" class="form-control" accept="video/*"></div>
+            <div class="mb-3"><label>إضافة صور أعمال جديدة</label><input type="file" name="new_portfolio" class="form-control" accept="image/*" multiple></div>
+            {% endif %}
+            <button type="submit" class="btn btn-primary">حفظ</button>
+        </form></div></div>
+
+        {% if current_user.user_type == 'artisan' and portfolio_list %}
+        <div class="portfolio-section"><h3 class="mb-3">📸 أعمالي</h3><div class="portfolio-grid">
+            {% for img in portfolio_list %}
+            <div class="portfolio-item">
+                <img src="{{ img }}" class="portfolio-img" onclick="openModal('{{ img }}')">
+                <form method="POST" style="display:inline;" onsubmit="return confirm('هل أنت متأكد من حذف هذه الصورة؟');">
+                    <input type="hidden" name="delete_image" value="{{ img }}">
+                    <input type="hidden" name="action" value="delete_portfolio">
+                    <button type="submit" class="delete-btn" title="حذف">×</button>
+                </form>
+            </div>
+            {% endfor %}
+        </div></div>
+        {% endif %}
+
+        <a href="/" class="btn btn-secondary mt-3">العودة للرئيسية</a>
+    </div>
+    <div class="modal fade" id="imageModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-body"><img src="" id="modalImage" style="width:100%;"></div></div></div></div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>function openModal(src){ document.getElementById('modalImage').src = src; new bootstrap.Modal(document.getElementById('imageModal')).show(); }</script>
+    </body></html>''', current_user=current_user, avg_rating=avg_rating, num_ratings=num_ratings, portfolio_list=portfolio_list, User=User, SPECIALTIES=SPECIALTIES)
+
 # ================== البحث عن الطلبات ==================
 @app.route('/search')
 def search():
@@ -1436,7 +1152,7 @@ def search():
 def post_request():
     if current_user.user_type != 'client' and not is_admin_user(current_user):
         flash('هذه الميزة متاحة فقط لأصحاب المنازل والشركات')
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('index'))
     if request.method == 'POST':
         title = request.form['title'] or 'طلب خدمة'
         description = request.form['description']
@@ -1465,7 +1181,7 @@ def post_request():
         db.session.commit()
         flash('تم نشر الطلب بنجاح')
         # TODO: إرسال إشعارات البريد الإلكتروني للحرفيين المناسبين (سيتم إضافته لاحقاً)
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('index'))
     
     # عرض نموذج النشر
     return render_template_string('''
@@ -1530,7 +1246,7 @@ def post_request():
             </div>
             <button type="submit" class="btn btn-primary w-100">تم النشر</button>
         </form>
-        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary w-100 mt-2">العودة</a>
+        <a href="/" class="btn btn-secondary w-100 mt-2">العودة</a>
     </div></body></html>
     ''', User=User, MOROCCAN_CITIES=MOROCCAN_CITIES, SPECIALTIES=SPECIALTIES)
 
@@ -1544,10 +1260,10 @@ def send_offer(request_id):
     req = Request.query.get_or_404(request_id)
     if req.status != 'open' or req.offers_count >= 30:
         flash('الطلب مغلق أو اكتمل')
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('index'))
     if Offer.query.filter_by(request_id=request_id, artisan_id=current_user.id).first():
         flash('قدمت عرضاً مسبقاً')
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('index'))
     if request.method == 'POST':
         message = request.form['message']
         images = voice = video = ''
@@ -1591,7 +1307,7 @@ def send_offer(request_id):
         db.session.add(msg)
         db.session.commit()
         flash('تم إرسال العرض وستظهر رسالتك في محادثة مع الزبون')
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('index'))
     return render_template_string('''
     <!DOCTYPE html><html dir="rtl"><head><title>تقديم عرض</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -1661,7 +1377,7 @@ def view_offers(request_id):
         <h3>العروض المقدمة</h3><div class="row">{% for item in offers %}<div class="col-md-4 mb-3"><div class="card"><div class="card-body"><div style="display:flex; align-items:center; margin-bottom:10px;"><img src="{{ item.artisan.profile_image or '/uploads/placeholder.jpg' }}" style="width:50px;height:50px;border-radius:50%; object-fit:cover; margin-left:10px;"><div><h5><a href="/user/{{ item.artisan.id }}">{{ item.artisan.full_name or item.artisan.username }}</a></h5><p class="text-muted">{{ item.artisan.specialty }}</p>{% if item.artisan.experience_years %}<p class="text-muted small">خبرة {{ item.artisan.experience_years }} سنة</p>{% endif %}</div></div><p>{{ item.offer.message }}</p>{% if item.offer.images %}<p>🖼️ <a href="{{ item.offer.images }}" target="_blank">صور</a></p>{% endif %}{% if item.offer.voice %}<p>🎤 <a href="{{ item.offer.voice }}" target="_blank">تسجيل صوتي</a></p>{% endif %}{% if item.offer.video %}<p>🎥 <a href="{{ item.offer.video }}" target="_blank">فيديو</a></p>{% endif %}
         <div class="quick-message-box mt-2"><form method="POST"><input type="hidden" name="artisan_id" value="{{ item.artisan.id }}"><div class="d-flex align-items-center gap-2"><textarea name="quick_message" class="form-control" rows="1" placeholder="اكتب رسالتك..."></textarea><button type="submit" class="btn btn-primary btn-sm">💬</button></div><div class="d-flex mt-1"><label class="action-btn">🖼️</label><label class="action-btn">◀️</label><label class="action-btn">🔊</label><label class="action-btn">⬆️</label></div><small class="text-muted">المدينة: {{ item.artisan.district }}</small></form></div>
         <a href="/start-chat/{{ req.id }}/{{ item.artisan.id }}" class="btn btn-primary btn-sm mt-2">فتح المحادثة</a>{% if can_rate %}<a href="/rate/{{ item.artisan.id }}/{{ req.id }}" class="btn btn-warning btn-sm mt-2">تقييم</a>{% endif %}</div></div></div>{% endfor %}</div>
-        <a href="/client-dashboard" class="btn btn-secondary mt-3">العودة</a>
+        <a href="/" class="btn btn-secondary mt-3">العودة</a>
     </div>
     <div class="modal fade" id="imageModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-body"><img src="" id="modalImage" style="width:100%;"></div></div></div></div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script><script>function openModal(src){ document.getElementById('modalImage').src = src; new bootstrap.Modal(document.getElementById('imageModal')).show(); }</script>
@@ -1726,6 +1442,200 @@ def start_chat(request_id, artisan_id):
         db.session.commit()
     return redirect(url_for('view_chat', chat_id=chat.id))
 
+# ================== صفحة الدردشة ==================
+@app.route('/chat/<int:chat_id>', methods=['GET','POST'])
+@login_required
+def view_chat(chat_id):
+    chat = Chat.query.get_or_404(chat_id)
+    if current_user.id not in [chat.client_id, chat.artisan_id] and not is_admin_user(current_user):
+        return redirect(url_for('index'))
+    other = User.query.get(chat.artisan_id if current_user.id == chat.client_id else chat.client_id)
+
+    # معالجة حذف صورة من رسالة
+    if request.method == 'POST' and request.form.get('action') == 'delete_message_image':
+        msg_id = request.form.get('message_id')
+        img_url = request.form.get('image_url')
+        if msg_id and img_url:
+            msg = Message.query.get(msg_id)
+            if msg and msg.sender_id == current_user.id:
+                delete_message_image(msg_id, img_url)
+                flash('تم حذف الصورة', 'success')
+        return redirect(url_for('view_chat', chat_id=chat_id))
+
+    if request.method == 'POST' and request.form.get('action') != 'delete_message_image':
+        content = request.form.get('message', '')
+        if contains_blocked_patterns(content):
+            flash('الرسالة تحتوي على رقم هاتف أو رابط تواصل ممنوع')
+            return redirect(url_for('view_chat', chat_id=chat_id))
+
+        images = voice = video = ''
+        if 'images' in request.files:
+            files = request.files.getlist('images')
+            if files and files[0].filename:
+                images = save_multiple_files(files, subfolder=f"chats/{chat_id}")
+        if 'voice' in request.files:
+            f = request.files['voice']
+            if f and f.filename:
+                voice = save_file_to_local(f, subfolder=f"chats/{chat_id}")
+        if 'video' in request.files:
+            f = request.files['video']
+            if f and f.filename:
+                video = save_file_to_local(f, subfolder=f"chats/{chat_id}")
+
+        msg = Message(chat_id=chat_id, sender_id=current_user.id, content=content, images=images, voice=voice, video=video)
+        db.session.add(msg)
+        db.session.commit()
+        return redirect(url_for('view_chat', chat_id=chat_id))
+
+    messages = Message.query.filter_by(chat_id=chat_id).order_by(Message.created_at).all()
+    for m in messages:
+        if m.sender_id != current_user.id and not m.is_read:
+            m.is_read = True
+    db.session.commit()
+
+    return render_template_string('''
+    <!DOCTYPE html><html dir="rtl"><head><title>محادثة مع {{ other.full_name or other.username }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .stats-mini{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.7);color:#fff;padding:5px 10px;border-radius:20px;font-size:12px;z-index:9999;opacity:0.6;}
+        .message-container{height:400px;overflow-y:scroll;border:1px solid #ddd;padding:10px;background:#f9f9f9;margin-bottom:10px;}
+        .my-message{background-color:#007bff;color:white;margin-left:auto;padding:8px 12px;border-radius:15px;max-width:70%;margin-bottom:5px;clear:both;float:right;text-align:right;}
+        .other-message{background-color:#e9ecef;color:black;padding:8px 12px;border-radius:15px;max-width:70%;margin-bottom:5px;clear:both;float:left;text-align:right;}
+        .message-wrapper{width:100%;overflow:hidden;margin-bottom:10px;}
+        .action-btn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:#f0f0f0;color:#333;text-decoration:none;margin-left:5px;cursor:pointer;border:none;}
+        .action-btn:hover{background:#ddd;}
+        .media-preview{max-width:100%;max-height:200px;margin-top:5px;border-radius:5px;}
+        .delete-image-btn{position:absolute;top:0;right:0;background:rgba(255,0,0,0.7);color:white;border:none;border-radius:50%;width:25px;height:25px;font-size:16px;line-height:1;cursor:pointer;}
+        .image-container{position:relative;display:inline-block;margin:5px;}
+        .instruction-section{margin-top:30px;padding-top:20px;border-top:2px solid #ddd;clear:both;}
+        .instruction-img{width:100%;max-height:400px;object-fit:contain;border:1px solid #ddd;border-radius:5px;cursor:pointer;}
+        .warning-text{color:#dc3545;font-size:0.9rem;margin-bottom:5px;text-align:center;}
+    </style></head>
+    <body>
+    <div class="stats-mini">👥 {{ User.query.count() }} | 🔨 {{ User.query.filter_by(user_type='artisan').count() }}</div>
+    <div class="container mt-5" style="max-width:600px;">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+            <div class="d-flex align-items-center">
+                <img src="{{ other.profile_image or '/uploads/placeholder.jpg' }}" style="width:50px;height:50px;border-radius:50%; object-fit:cover; margin-left:10px;">
+                <h4><a href="/user/{{ other.id }}">{{ other.full_name or other.username }}</a></h4>
+            </div>
+        </div>
+        <div class="message-container" id="messageContainer">
+            {% for m in messages %}
+                <div class="message-wrapper">
+                    {% if m.is_blocked %}
+                        <div class="blocked-message text-center p-2 bg-danger text-white rounded">[هذه الرسالة محظورة]</div>
+                    {% else %}
+                        <div class="{% if m.sender_id == current_user.id %}my-message{% else %}other-message{% endif %}">
+                            <div class="message-content">
+                                {% if m.content and (m.content.startswith('https://www.google.com/maps?q=') or m.content.startswith('https://maps.app.goo.gl/') or 'maps.google.com' in m.content) %}
+                                    <a href="{{ m.content }}" target="_blank" style="color: {% if m.sender_id == current_user.id %}white{% else %}blue{% endif %};">📍 موقع على الخريطة</a>
+                                {% elif m.content %}
+                                    {{ m.content }}
+                                {% endif %}
+                            </div>
+                            {% if m.images %}
+                                <div style="display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; justify-content: {% if m.sender_id == current_user.id %}flex-end{% else %}flex-start{% endif %};">
+                                    {% for img in m.images.split(',') %}
+                                        <div class="image-container">
+                                            <a href="{{ img }}" target="_blank">
+                                                <img src="{{ img }}" class="media-preview" style="width:100px; height:100px; object-fit:cover;">
+                                            </a>
+                                            {% if m.sender_id == current_user.id %}
+                                                <form method="POST" style="display:inline;" onsubmit="return confirm('هل أنت متأكد من حذف هذه الصورة؟');">
+                                                    <input type="hidden" name="action" value="delete_message_image">
+                                                    <input type="hidden" name="message_id" value="{{ m.id }}">
+                                                    <input type="hidden" name="image_url" value="{{ img }}">
+                                                    <button type="submit" class="delete-image-btn" title="حذف الصورة">×</button>
+                                                </form>
+                                            {% endif %}
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                            {% if m.voice %}
+                                <audio controls src="{{ m.voice }}" style="width:100%; margin-top:5px;"></audio>
+                            {% endif %}
+                            {% if m.video %}
+                                <video controls src="{{ m.video }}" style="max-width:100%; max-height:200px; margin-top:5px;"></video>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+        <form method="POST" enctype="multipart/form-data" id="chatForm">
+            <div class="warning-text">⚠️ يمنع مشاركة أرقام الهاتف، سيتم رفض أي رسالة تحتوي على رقم.</div>
+            <div class="mb-2"><textarea name="message" class="form-control" placeholder="اكتب رسالتك..." rows="2" id="messageText"></textarea></div>
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <button type="submit" class="btn btn-primary flex-grow-1">💬 إرسال</button>
+                <label for="images" class="action-btn">🖼️</label><input type="file" name="images" id="images" accept="image/*" multiple style="display: none;" onchange="document.getElementById('chatForm').submit();">
+                <label for="video" class="action-btn">◀️</label><input type="file" name="video" id="video" accept="video/*" style="display: none;" onchange="document.getElementById('chatForm').submit();">
+                <label for="voice" class="action-btn">🔊</label><input type="file" name="voice" id="voice" accept="audio/*" style="display: none;" onchange="document.getElementById('chatForm').submit();">
+                <button type="button" class="action-btn" id="smartLocationBtn" title="مشاركة موقعي">📍</button>
+            </div>
+            <div id="locationResultArea" style="display: none; margin-bottom: 10px;" class="p-2 border rounded">
+                <div class="input-group">
+                    <input type="text" id="manualLocationLink" class="form-control" placeholder="الصق رابط الموقع هنا">
+                    <button class="btn btn-primary" type="button" id="useLocationLink">إضافة</button>
+                </div>
+                <small class="text-muted">بعد لصق الرابط، اضغط "إضافة" ليظهر في رسالتك.</small>
+            </div>
+        </form>
+        <div class="instruction-section">
+            <div class="mt-3 text-center">
+                <img src="{{ url_for('static', filename='instruction.jpg') }}?v={{ range(1, 1000) | random }}" 
+                     alt="تعليمات إرسال الموقع" 
+                     class="instruction-img"
+                     onclick="openModal(this.src)">
+                <p class="text-muted small mt-1">تعليمات إرسال الموقع: اضغط على زر الموقع، افتح الخريطة، انسخ الرابط والصقه.</p>
+            </div>
+            {% if current_user.is_admin %}
+            <div class="mt-2 p-3 bg-light rounded border">
+                <h6>رفع صورة تعليمية جديدة</h6>
+                <form method="POST" action="{{ url_for('upload_instruction_image') }}" enctype="multipart/form-data" class="d-flex align-items-center gap-2">
+                    <input type="file" name="instruction_image" accept="image/*" class="form-control form-control-sm" style="width: auto;" required>
+                    <button type="submit" class="btn btn-sm btn-success">➕ رفع الصورة</button>
+                </form>
+                <small class="text-muted">هذه الصورة ستظهر لجميع المستخدمين.</small>
+            </div>
+            {% endif %}
+        </div>
+        <div class="modal fade" id="imageModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-body">
+                        <img src="" id="modalImage" style="width:100%;">
+                    </div>
+                </div>
+            </div>
+        </div>
+        <script>
+        var container = document.getElementById('messageContainer');
+        container.scrollTop = container.scrollHeight;
+        document.getElementById('smartLocationBtn').addEventListener('click', function() {
+            window.open('https://maps.google.com', '_blank');
+            document.getElementById('locationResultArea').style.display = 'block';
+        });
+        document.getElementById('useLocationLink').addEventListener('click', function() {
+            const link = document.getElementById('manualLocationLink').value.trim();
+            if (link) {
+                const msgField = document.getElementById('messageText');
+                msgField.value += (msgField.value ? '\\n' : '') + link;
+                document.getElementById('manualLocationLink').value = '';
+                document.getElementById('locationResultArea').style.display = 'none';
+            } else {
+                alert('الرجاء لصق الرابط أولاً.');
+            }
+        });
+        function openModal(src) {
+            document.getElementById('modalImage').src = src;
+            var modal = new bootstrap.Modal(document.getElementById('imageModal'));
+            modal.show();
+        }
+        </script>
+    </div></body></html>''', messages=messages, other=other, User=User)
+
 # ================== قائمة المحادثات ==================
 @app.route('/messages')
 @login_required
@@ -1749,7 +1659,7 @@ def messages_list():
     <div class="stats-mini">👥 {{ User.query.count() }} | 🔨 {{ User.query.filter_by(user_type='artisan').count() }}</div>
     <div class="container mt-5">
         <h1>الرسائل</h1>
-        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary mb-3">العودة</a>
+        <a href="/" class="btn btn-secondary mb-3">العودة</a>
         <div class="list-group">
             {% for item in data %}
             <a href="/chat/{{ item.chat.id }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
@@ -1779,7 +1689,7 @@ def delete_request(request_id):
     flash('تم حذف الطلب وجميع العروض المرتبطة به بنجاح')
     if is_admin_user(current_user):
         return redirect(url_for('admin_dashboard'))
-    return redirect(url_for('dashboard'))
+    return redirect(url_for('index'))
 
 # ================== إغلاق الطلب ==================
 @app.route('/close-request/<int:request_id>')
@@ -1792,7 +1702,7 @@ def close_request(request_id):
         flash('تم إغلاق الطلب')
     else:
         flash('غير مصرح')
-    return redirect(url_for('dashboard'))
+    return redirect(url_for('index'))
 
 # ================== لوحة الإدارة ==================
 @app.route('/admin')
@@ -1838,10 +1748,49 @@ def admin_dashboard():
     total_requests=total_requests, total_offers=total_offers, total_chats=total_chats,
     recent_users=recent_users, recent_requests=recent_requests, chat_data=chat_data, time_ago=time_ago)
 
+# ================== رفع الصورة التعليمية (للمسؤول فقط) ==================
+@app.route('/upload-instruction-image', methods=['POST'])
+@login_required
+@admin_required
+def upload_instruction_image():
+    if 'instruction_image' not in request.files:
+        flash('لم يتم اختيار ملف', 'danger')
+        return redirect(request.referrer or url_for('index'))
+    file = request.files['instruction_image']
+    if file.filename == '':
+        flash('الملف فارغ', 'danger')
+        return redirect(request.referrer or url_for('index'))
+    if file and allowed_file(file.filename):
+        try:
+            filename = 'instruction.jpg'
+            filepath = os.path.join(STATIC_FOLDER, filename)
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            file.save(filepath)
+            flash('✅ تم رفع الصورة التعليمية بنجاح', 'success')
+            print(f"✅ تم حفظ الصورة التعليمية في: {filepath}")
+        except Exception as e:
+            flash(f'❌ خطأ في حفظ الصورة: {str(e)}', 'danger')
+            print(f"❌ خطأ في رفع الصورة التعليمية: {e}")
+    else:
+        flash('نوع الملف غير مسموح به', 'danger')
+    return redirect(request.referrer or url_for('index'))
+
+# ================== المسارات القديمة (للتوافق) ==================
+@app.route('/client-dashboard')
+@login_required
+def client_dashboard():
+    return redirect(url_for('index'))
+
+@app.route('/artisan-dashboard')
+@login_required
+def artisan_dashboard():
+    return redirect(url_for('index'))
+
 # ================== تشغيل التطبيق ==================
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
 
 print("✅ الجزء الثاني من المسارات تم تحميله بنجاح.")
-print("✅ الكود الكامل الآن جاهز مع تحسينات التسجيل والملف الشخصي.")
+print("✅ الكود الكامل الآن جاهز مع الصفحة الموحدة للجميع.")
