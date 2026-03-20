@@ -1,6 +1,5 @@
 # ============================================================
 # منصة بريكولات - الجزء الأول (الإعدادات + الصفحة الرئيسية)
-# مع جعل التخصص إجباريًا وإزالة التمييز بين الزبون والحرفي
 # ============================================================
 
 import os
@@ -26,7 +25,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///bricolets.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
 
-# ================== إعدادات البريد الإلكتروني (مضمنة مباشرة) ==================
+# ================== إعدادات البريد الإلكتروني (مضمنة) ==================
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
@@ -44,6 +43,7 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'mp4', 'mp3', 'wav', 'ogg', '
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
+# إنشاء المجلدات
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(os.path.join(UPLOAD_FOLDER, 'users'), exist_ok=True)
 os.makedirs(os.path.join(UPLOAD_FOLDER, 'requests'), exist_ok=True)
@@ -67,7 +67,7 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password = db.Column(db.String(200), nullable=False)
-    user_type = db.Column(db.String(20), nullable=False)  # 'client' أو 'artisan'
+    user_type = db.Column(db.String(20), nullable=False, default='client')
     full_name = db.Column(db.String(100), nullable=True)
     phone = db.Column(db.String(20), nullable=True)
     district = db.Column(db.String(100), nullable=True)
@@ -83,9 +83,8 @@ class User(UserMixin, db.Model):
 
     @property
     def profile_completed(self):
-        if self.user_type == 'client':
-            return bool(self.full_name and self.district)
-        return bool(self.full_name and self.district and self.specialty and self.profile_image)
+        # لا نستخدم user_type في هذه النسخة، نعتمد على specialty للتمييز
+        return bool(self.full_name and self.phone and self.district and self.specialty)
 
 class Request(db.Model):
     __tablename__ = 'requests'
@@ -169,7 +168,8 @@ with app.app_context():
                 full_name='هشام',
                 district='مراكش',
                 is_admin=True,
-                profile_image='/uploads/placeholder.jpg'
+                profile_image='/uploads/placeholder.jpg',
+                specialty='مطور'  # تخصص افتراضي
             )
             db.session.add(admin_user)
             print("➕ تم إضافة حساب الأدمن.")
@@ -184,7 +184,8 @@ with app.app_context():
                 district='مراكش - جليز',
                 age=35,
                 gender='ذكر',
-                profile_image='/uploads/placeholder.jpg'
+                profile_image='/uploads/placeholder.jpg',
+                specialty='زبون'
             )
             db.session.add(admin)
             print("➕ تم إضافة مستخدم الزبون التجريبي.")
@@ -330,9 +331,7 @@ def admin_required(f):
     return decorated_function
 
 def dashboard_url_for(user):
-    if user.is_authenticated:
-        return url_for('dashboard')
-    return url_for('index')
+    return url_for('index')  # كل المستخدمين يذهبون إلى الصفحة الرئيسية الموحدة
 
 # ================== خدمة الملفات المرفوعة ==================
 @app.route('/uploads/<path:filename>')
@@ -399,9 +398,7 @@ def index():
         unread = get_unread_messages_count(current_user.id)
     
     return render_template_string('''
-    <!DOCTYPE html><html dir="rtl"><head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
         <title>بريكولات - منصة الحرفيين في المغرب</title>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
         <style>
@@ -423,8 +420,7 @@ def index():
         <div class="stats-mini">👥 {{ total_clients }} | 🔨 {{ total_artisans }}</div>
         <div class="container mt-4">
             <img src="{{ url_for('static', filename='cover.jpg') }}?v={{ range(1, 1000) | random }}" 
-                 alt="غلاف بريكولات" 
-                 class="cover-image"
+                 alt="غلاف بريكولات" class="cover-image"
                  onclick="openModal(this.src)"
                  onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1565008447742-97f6f38c985c?ixlib=rb-4.0.3&auto=format&fit=crop&w=1350&q=80';">
             {% if current_user.is_admin %}
@@ -437,7 +433,6 @@ def index():
                 <small class="text-muted">هذه الصورة ستظهر في أعلى الصفحة للجميع.</small>
             </div>
             {% endif %}
-            
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2>مرحباً {{ current_user.full_name or current_user.username if current_user.is_authenticated else 'زائر' }}</h2>
                 <div>
@@ -456,22 +451,18 @@ def index():
                     {% endif %}
                 </div>
             </div>
-            
             <div class="alert alert-info">
                 <p>إذا كنت تريد إصلاح شيء في منزلك أو كنت في شركة تبحث عن حرفي، انشر طلبك وسيراه الحرفيون القريبون منك.</p>
                 {% if not current_user.is_authenticated %}
                 <p class="mb-0 text-danger"><strong>سجل أولاً لتتمكن من نشر الطلبات وإرسال الرسائل.</strong></p>
                 {% endif %}
             </div>
-            
-            <!-- أزرار الإجراءات السريعة - كلها تؤدي إلى نشر الطلب (أي مستخدم مسجل) -->
             <div class="action-btn-group">
                 <a href="{% if current_user.is_authenticated %}{{ url_for('post_request') }}{% else %}{{ url_for('login', next=url_for('post_request')) }}{% endif %}" class="action-btn primary">أنا صاحب منزل أحتاج معلم</a>
                 <a href="{% if current_user.is_authenticated %}{{ url_for('post_request') }}{% else %}{{ url_for('login', next=url_for('post_request')) }}{% endif %}" class="action-btn success">أنا صاحب شركة أحتاج مقاول</a>
                 <a href="{% if current_user.is_authenticated %}{{ url_for('post_request') }}{% else %}{{ url_for('login', next=url_for('post_request')) }}{% endif %}" class="action-btn warning">أنا مقاول أحتاج معلم</a>
                 <a href="{% if current_user.is_authenticated %}{{ url_for('post_request') }}{% else %}{{ url_for('login', next=url_for('post_request')) }}{% endif %}" class="action-btn info">أنا معلم أحتاج مساعد أو خدام</a>
             </div>
-            
             <div class="action-btn-group">
                 <a href="/search" class="action-btn primary">جميع الطلبات في المغرب</a>
                 {% if current_user.is_authenticated %}
@@ -480,10 +471,7 @@ def index():
                 <a href="{{ url_for('login', next=url_for('search', district='', specialty='')) }}" class="action-btn success">طلبات في مدينتي وتخصصي (سجل أولاً)</a>
                 {% endif %}
             </div>
-            
             <hr>
-            
-            <!-- طلباتي (للمستخدم المسجل) -->
             {% if current_user.is_authenticated %}
             <h3>طلباتي</h3>
             <div class="row">
@@ -509,8 +497,6 @@ def index():
             </div>
             <hr>
             {% endif %}
-            
-            <!-- جميع الطلبات المفتوحة -->
             <h3>{{ 'الطلبات المفتوحة' if current_user.is_authenticated else 'أحدث الطلبات في المغرب' }}</h3>
             <div class="row">
                 {% for req in all_requests %}
@@ -533,7 +519,6 @@ def index():
                 {% endfor %}
             </div>
         </div>
-        
         <div class="modal fade" id="imageModal" tabindex="-1">
             <div class="modal-dialog modal-lg">
                 <div class="modal-content">
@@ -543,7 +528,6 @@ def index():
                 </div>
             </div>
         </div>
-        
         <script>
         function openModal(src) {
             document.getElementById('modalImage').src = src;
@@ -600,11 +584,11 @@ def logout():
     return redirect(url_for('index'))
 
 print("✅ الجزء الأول من المسارات تم تحميله بنجاح.")
-print("✅ أضف الآن الجزء الثاني (باقي المسارات مع دالة login المعدلة وإرسال الإشعارات).")# ============================================================
-# الجزء الثاني: جميع المسارات المتبقية مع تحسينات التسجيل والإشعارات
+print("✅ أضف الآن الجزء الثاني (باقي المسارات) لإكمال الموقع.")# ============================================================
+# الجزء الثاني: جميع المسارات المتبقية
 # ============================================================
 
-# قائمة شاملة لمدن المغرب
+# قائمة شاملة لمدن المغرب (للاستخدام في التسجيل وإكمال الملف الشخصي)
 MOROCCAN_CITIES = [
     'أكادير', 'أيت ملول', 'أصيلة', 'بني ملال', 'بنسليمان', 'برشيد', 'بوجدور', 'بولمان', 'بوزنيقة', 'الداخلة',
     'الدار البيضاء', 'فاس', 'فكيك', 'كلميم', 'العرائش', 'القصر الكبير', 'الحاجب', 'الحسيمة', 'الجديدة', 'جرادة',
@@ -625,12 +609,12 @@ MOROCCAN_CITIES = [
     'أيت ملول', 'تيزنيت', 'طانطان', 'العيون', 'الداخلة'
 ]
 
-# قائمة التخصصات
+# قائمة التخصصات (مع خيار "آخر")
 SPECIALTIES = [
     'بلومبي', 'نجار', 'سباك', 'كهربائي', 'رسام', 'حدائق', 'جباص', 'المنيوم', 'جلايجي', 'كباص'
 ]
 
-# ================== تسجيل الدخول (مع معالجة next) ==================
+# ================== تسجيل الدخول ==================
 @app.route('/login', methods=['GET','POST'])
 def login():
     if request.method == 'POST':
@@ -689,7 +673,7 @@ def register():
             username=username,
             email=email,
             password=hashed,
-            user_type='client',  # سيتم تعديله في إكمال الملف الشخصي حسب التخصص
+            user_type='client',  # مؤقت
             is_admin=is_admin
         )
         db.session.add(new_user)
@@ -734,7 +718,6 @@ def complete_profile():
         specialty = request.form.get('specialty', '').strip()
         experience_years = request.form.get('experience_years', '').strip()
         
-        # التحقق من الحقول الإجبارية
         errors = []
         if not full_name:
             errors.append('الاسم الكامل مطلوب')
@@ -744,8 +727,6 @@ def complete_profile():
             errors.append('رقم الهاتف غير صحيح. يجب أن يبدأ بـ 05 أو 06 أو 07 ويتكون من 10 أرقام')
         if not district:
             errors.append('المدينة مطلوبة')
-        
-        # التحقق من وجود تخصص (إجباري للجميع)
         if not specialty:
             errors.append('التخصص مطلوب لجميع المستخدمين')
         elif specialty == 'other':
@@ -760,18 +741,15 @@ def complete_profile():
                 flash(error, 'danger')
             return redirect(url_for('complete_profile'))
         
-        # تحديث البيانات
         current_user.full_name = full_name
         current_user.phone = phone
         current_user.district = normalize_city(district)
         current_user.specialty = specialty
-        current_user.user_type = 'client'  # نعتبر الجميع عملاء (يمكنهم النشر) لكنهم يحتفظون بالتخصص للإشعارات
+        current_user.user_type = 'client'  # نعتبر الجميع عملاء ولكن يحتفظون بالتخصص للإشعارات
         
-        # سنوات الخبرة (اختياري)
         if experience_years and experience_years.isdigit():
             current_user.experience_years = int(experience_years)
         
-        # صورة شخصية (اختياري)
         if 'profile_image' in request.files:
             file = request.files['profile_image']
             url = save_file_to_local(file, subfolder=f"users/{current_user.id}")
@@ -782,7 +760,6 @@ def complete_profile():
         flash('تم إكمال الملف الشخصي بنجاح')
         return redirect(url_for('index'))
     
-    # عرض النموذج
     return render_template_string('''
     <!DOCTYPE html><html dir="rtl"><head><title>إكمال الملف الشخصي</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -827,7 +804,7 @@ def complete_profile():
             </div>
             <div class="mb-3">
                 <label>المدينة <span class="text-danger">*</span></label>
-                <input list="cities" name="district" id="district" class="form-control" placeholder="اختر أو اكتب مدينتك" required>
+                <input list="cities" name="district" class="form-control" required>
                 <datalist id="cities">
                     {% for city in MOROCCAN_CITIES %}
                     <option value="{{ city }}">
@@ -935,8 +912,8 @@ def public_profile(user_id):
             <img src="{{ user.profile_image or '/uploads/placeholder.jpg' }}" class="profile-img mb-3">
             <h2>{{ user.full_name or user.username }}</h2>
             <p class="text-muted">{{ user.district or 'غير محدد' }}</p>
+            <p class="text-muted">🔧 {{ user.specialty or 'لا يوجد تخصص' }}</p>
             {% if user.user_type == 'artisan' %}
-                <p class="text-muted">{{ user.specialty }}</p>
                 {% if user.experience_years %}<p class="text-muted">خبرة {{ user.experience_years }} سنة</p>{% endif %}
                 {% if num_ratings > 0 %}<div class="rating-stars">{% for i in range(5) %}{% if i < avg_rating|int %}★{% else %}☆{% endif %}{% endfor %} <span class="text-muted">({{ num_ratings }})</span></div>{% endif %}
             {% endif %}
@@ -1143,15 +1120,7 @@ def search():
     return render_template_string('''
     <!DOCTYPE html><html dir="rtl"><head><title>الطلبات المفتوحة</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        .stats-mini{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.7);color:#fff;padding:5px 10px;border-radius:20px;font-size:12px;z-index:9999;opacity:0.6;}
-        .request-card{margin-bottom:20px;}
-        .request-images{display:flex; flex-wrap:wrap; gap:5px; margin-top:10px;}
-        .request-images img{width:80px;height:80px;object-fit:cover;border-radius:5px;cursor:pointer;transition:transform 0.2s;}
-        .client-info{display:flex;align-items:center;margin-bottom:10px;}
-        .client-img{width:40px;height:40px;border-radius:50%;object-fit:cover;margin-left:10px;}
-        .modal-body img{width:100%;}
-    </style>
+    <style> .stats-mini{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.7);color:#fff;padding:5px 10px;border-radius:20px;font-size:12px;z-index:9999;opacity:0.6;} </style>
     </head>
     <body>
     <div class="stats-mini">👥 {{ User.query.count() }} | 🔨 {{ User.query.filter_by(user_type='artisan').count() }}</div>
@@ -1231,9 +1200,8 @@ def post_request():
         db.session.add(new_req)
         db.session.commit()
         
-        # إرسال الإشعارات للحرفيين المهتمين (كل من لديه نفس التخصص والمدينة)
+        # إرسال الإشعارات للمستخدمين المهتمين (نفس التخصص والمدينة)
         try:
-            # نبحث عن المستخدمين الذين لديهم نفس التخصص والمدينة (يمكن أن يكونوا حرفيين أو لا، لكنهم سيتلقون الإشعار)
             interested_users = User.query.filter_by(specialty=specialty, district=district).all()
             if interested_users:
                 with mail.connect() as conn:
@@ -1299,7 +1267,11 @@ def post_request():
             </div>
             <div class="mb-3"><label>المدينة أو الحي</label>
                 <input list="cities" name="district" class="form-control" required>
-                <datalist id="cities">{% for city in MOROCCAN_CITIES %}<option value="{{ city }}">{% endfor %}</datalist>
+                <datalist id="cities">
+                    {% for city in MOROCCAN_CITIES %}
+                    <option value="{{ city }}">
+                    {% endfor %}
+                </datalist>
             </div>
             <div class="mb-3"><label>صور المشكلة (اختياري)</label><input type="file" name="images" class="form-control" accept="image/*" multiple></div>
             <button type="submit" class="btn btn-primary w-100">تم النشر</button>
@@ -1340,7 +1312,6 @@ def send_offer(request_id):
         if req.offers_count >= 30:
             req.status = 'cancelled'
         db.session.commit()
-        # إنشاء محادثة وإضافة رسالة
         chat = Chat.query.filter_by(request_id=request_id, client_id=req.client_id, artisan_id=current_user.id).first()
         if not chat:
             chat = Chat(request_id=request_id, client_id=req.client_id, artisan_id=current_user.id)
@@ -1401,63 +1372,422 @@ def view_offers(request_id):
     return render_template_string('''
     <!DOCTYPE html><html dir="rtl"><head><title>العروض</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style> .stats-mini{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.7);color:#fff;padding:5px 10px;border-radius:20px;font-size:12px;z-index:9999;opacity:0.6;} </style>
+    <style>
+        .stats-mini{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.7);color:#fff;padding:5px 10px;border-radius:20px;font-size:12px;z-index:9999;opacity:0.6;}
+        .request-images { display: flex; flex-wrap: wrap; gap: 10px; margin: 15px 0; }
+        .request-images img { width: 100px; height: 100px; object-fit: cover; border-radius: 5px; cursor: pointer; transition: transform 0.2s; }
+        .modal-body img { width: 100%; }
+        .quick-message-box { background: #f8f9fa; padding: 15px; border-radius: 10px; margin-top: 20px; }
+        .action-btn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background-color:#f0f0f0;color:#333;text-decoration:none;margin-left:5px;cursor:pointer;border:none;}
+        .action-btn:hover{background-color:#ddd;}
+    </style>
     </head>
-    <body>...</body></html>''' , req=req, offers=offers_data, can_rate=can_rate, request_images=request_images, User=User)
+    <body>
+    <div class="stats-mini">👥 {{ User.query.count() }} | 🔨 {{ User.query.filter_by(user_type='artisan').count() }}</div>
+    <div class="container mt-5">
+        <h1>عروض الطلب: {{ req.title }}</h1>
+        {% if request_images %}
+        <div class="card mb-4"><div class="card-header bg-info text-white">صور المشكلة</div><div class="card-body"><div class="request-images">{% for img in request_images %}<img src="{{ img }}" onclick="openModal('{{ img }}')">{% endfor %}</div></div></div>
+        {% endif %}
+        <div class="card mb-4"><div class="card-header bg-primary text-white">تفاصيل الطلب</div><div class="card-body"><h5>{{ req.title }}</h5><p>{{ req.description }}</p><p><strong>التخصص:</strong> {{ req.specialty }} | <strong>الحي:</strong> {{ req.district }}</p><p><strong>نشر:</strong> {{ time_ago(req.created_at) }}</p><p>عروض: {{ req.offers_count }}/30 | حالة: {{ 'مفتوح' if req.status=='open' else 'مغلق' }}</p></div></div>
+        <h3>العروض المقدمة</h3><div class="row">
+            {% for item in offers %}
+            <div class="col-md-4 mb-3">
+                <div class="card"><div class="card-body">
+                    <div style="display:flex; align-items:center; margin-bottom:10px;">
+                        <img src="{{ item.artisan.profile_image or '/uploads/placeholder.jpg' }}" style="width:50px;height:50px;border-radius:50%; object-fit:cover; margin-left:10px;">
+                        <div>
+                            <h5><a href="/user/{{ item.artisan.id }}">{{ item.artisan.full_name or item.artisan.username }}</a></h5>
+                            <p class="text-muted">{{ item.artisan.specialty }}</p>
+                            {% if item.artisan.experience_years %}<p class="text-muted small">خبرة {{ item.artisan.experience_years }} سنة</p>{% endif %}
+                        </div>
+                    </div>
+                    <p>{{ item.offer.message }}</p>
+                    {% if item.offer.images %}<p>🖼️ <a href="{{ item.offer.images }}" target="_blank">صور</a></p>{% endif %}
+                    {% if item.offer.voice %}<p>🎤 <a href="{{ item.offer.voice }}" target="_blank">تسجيل صوتي</a></p>{% endif %}
+                    {% if item.offer.video %}<p>🎥 <a href="{{ item.offer.video }}" target="_blank">فيديو</a></p>{% endif %}
+                    <div class="quick-message-box mt-2">
+                        <form method="POST">
+                            <input type="hidden" name="artisan_id" value="{{ item.artisan.id }}">
+                            <div class="d-flex align-items-center gap-2">
+                                <textarea name="quick_message" class="form-control" rows="1" placeholder="اكتب رسالتك..."></textarea>
+                                <button type="submit" class="btn btn-primary btn-sm">💬</button>
+                            </div>
+                            <div class="d-flex mt-1">
+                                <label class="action-btn">🖼️</label>
+                                <label class="action-btn">◀️</label>
+                                <label class="action-btn">🔊</label>
+                                <label class="action-btn">⬆️</label>
+                            </div>
+                            <small class="text-muted">المدينة: {{ item.artisan.district }}</small>
+                        </form>
+                    </div>
+                    <a href="/start-chat/{{ req.id }}/{{ item.artisan.id }}" class="btn btn-primary btn-sm mt-2">فتح المحادثة</a>
+                    {% if can_rate %}<a href="/rate/{{ item.artisan.id }}/{{ req.id }}" class="btn btn-warning btn-sm mt-2">تقييم</a>{% endif %}
+                </div></div>
+            </div>
+            {% endfor %}
+        </div>
+        <a href="/" class="btn btn-secondary mt-3">العودة</a>
+    </div>
+    <div class="modal fade" id="imageModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-body"><img src="" id="modalImage" style="width:100%;"></div></div></div></div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>function openModal(src){ document.getElementById('modalImage').src = src; new bootstrap.Modal(document.getElementById('imageModal')).show(); }</script>
+    </body></html>''', req=req, offers=offers_data, can_rate=can_rate, request_images=request_images, User=User)
 
 # ================== تقييم الحرفي ==================
 @app.route('/rate/<int:artisan_id>/<int:request_id>', methods=['GET','POST'])
 @login_required
 def rate_artisan(artisan_id, request_id):
-    # مشابهة للكود السابق، يمكنك نسخه من الجزء الثاني السابق
-    # (لضيق المساحة، لم يتم تضمين الكود الكامل ولكن يمكن إضافته)
-    pass
+    req = Request.query.get_or_404(request_id)
+    if req.client_id != current_user.id:
+        return redirect(url_for('index'))
+    if Rating.query.filter_by(rater_id=current_user.id, rated_id=artisan_id, request_id=request_id).first():
+        flash('قيمت هذا الحرفي مسبقاً')
+        return redirect(url_for('view_offers', request_id=request_id))
+    artisan = User.query.get_or_404(artisan_id)
+    if request.method == 'POST':
+        score = int(request.form['score'])
+        comment = request.form.get('comment', '')
+        rating = Rating(rater_id=current_user.id, rated_id=artisan_id, request_id=request_id, score=score, comment=comment)
+        db.session.add(rating)
+        db.session.commit()
+        flash('شكراً على التقييم')
+        return redirect(url_for('view_offers', request_id=request_id))
+    return render_template_string('''
+    <!DOCTYPE html><html dir="rtl"><head><title>تقييم {{ artisan.full_name or artisan.username }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>.stats-mini{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.7);color:#fff;padding:5px 10px;border-radius:20px;font-size:12px;z-index:9999;opacity:0.6;}</style>
+    </head>
+    <body>
+    <div class="stats-mini">👥 {{ User.query.count() }} | 🔨 {{ User.query.filter_by(user_type='artisan').count() }}</div>
+    <div class="container" style="max-width:500px;margin-top:50px">
+        <h2>تقييم {{ artisan.full_name or artisan.username }}</h2>
+        <form method="POST">
+            <div class="star-rating text-center">
+                <input type="radio" name="score" id="star5" value="5"><label for="star5">★</label>
+                <input type="radio" name="score" id="star4" value="4"><label for="star4">★</label>
+                <input type="radio" name="score" id="star3" value="3"><label for="star3">★</label>
+                <input type="radio" name="score" id="star2" value="2"><label for="star2">★</label>
+                <input type="radio" name="score" id="star1" value="1"><label for="star1">★</label>
+            </div>
+            <div class="mb-3"><textarea name="comment" class="form-control" placeholder="تعليق (اختياري)"></textarea></div>
+            <button type="submit" class="btn btn-primary">إرسال التقييم</button>
+        </form>
+    </div></body></html>''', artisan=artisan, User=User)
 
 # ================== بدء محادثة ==================
 @app.route('/start-chat/<int:request_id>/<int:artisan_id>')
 @login_required
 def start_chat(request_id, artisan_id):
-    # مشابهة
-    pass
+    req = Request.query.get_or_404(request_id)
+    if req.client_id != current_user.id and not is_admin_user(current_user):
+        flash('غير مصرح')
+        return redirect(url_for('index'))
+    chat = Chat.query.filter_by(request_id=request_id, client_id=req.client_id, artisan_id=artisan_id).first()
+    if not chat:
+        chat = Chat(request_id=request_id, client_id=req.client_id, artisan_id=artisan_id)
+        db.session.add(chat)
+        db.session.commit()
+    return redirect(url_for('view_chat', chat_id=chat.id))
 
 # ================== صفحة الدردشة ==================
 @app.route('/chat/<int:chat_id>', methods=['GET','POST'])
 @login_required
 def view_chat(chat_id):
-    # مشابهة، مع إضافة نص منع الأرقام
-    pass
+    chat = Chat.query.get_or_404(chat_id)
+    if current_user.id not in [chat.client_id, chat.artisan_id] and not is_admin_user(current_user):
+        return redirect(url_for('index'))
+    other = User.query.get(chat.artisan_id if current_user.id == chat.client_id else chat.client_id)
+
+    if request.method == 'POST' and request.form.get('action') == 'delete_message_image':
+        msg_id = request.form.get('message_id')
+        img_url = request.form.get('image_url')
+        if msg_id and img_url:
+            msg = Message.query.get(msg_id)
+            if msg and msg.sender_id == current_user.id:
+                delete_message_image(msg_id, img_url)
+                flash('تم حذف الصورة', 'success')
+        return redirect(url_for('view_chat', chat_id=chat_id))
+
+    if request.method == 'POST' and request.form.get('action') != 'delete_message_image':
+        content = request.form.get('message', '')
+        if contains_blocked_patterns(content):
+            flash('الرسالة تحتوي على رقم هاتف أو رابط تواصل ممنوع')
+            return redirect(url_for('view_chat', chat_id=chat_id))
+
+        images = voice = video = ''
+        if 'images' in request.files:
+            files = request.files.getlist('images')
+            if files and files[0].filename:
+                images = save_multiple_files(files, subfolder=f"chats/{chat_id}")
+        if 'voice' in request.files:
+            f = request.files['voice']
+            if f and f.filename:
+                voice = save_file_to_local(f, subfolder=f"chats/{chat_id}")
+        if 'video' in request.files:
+            f = request.files['video']
+            if f and f.filename:
+                video = save_file_to_local(f, subfolder=f"chats/{chat_id}")
+
+        msg = Message(chat_id=chat_id, sender_id=current_user.id, content=content, images=images, voice=voice, video=video)
+        db.session.add(msg)
+        db.session.commit()
+        return redirect(url_for('view_chat', chat_id=chat_id))
+
+    messages = Message.query.filter_by(chat_id=chat_id).order_by(Message.created_at).all()
+    for m in messages:
+        if m.sender_id != current_user.id and not m.is_read:
+            m.is_read = True
+    db.session.commit()
+
+    return render_template_string('''
+    <!DOCTYPE html><html dir="rtl"><head><title>محادثة مع {{ other.full_name or other.username }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .stats-mini{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.7);color:#fff;padding:5px 10px;border-radius:20px;font-size:12px;z-index:9999;opacity:0.6;}
+        .message-container{height:400px;overflow-y:scroll;border:1px solid #ddd;padding:10px;background:#f9f9f9;margin-bottom:10px;}
+        .my-message{background-color:#007bff;color:white;margin-left:auto;padding:8px 12px;border-radius:15px;max-width:70%;margin-bottom:5px;clear:both;float:right;text-align:right;}
+        .other-message{background-color:#e9ecef;color:black;padding:8px 12px;border-radius:15px;max-width:70%;margin-bottom:5px;clear:both;float:left;text-align:right;}
+        .message-wrapper{width:100%;overflow:hidden;margin-bottom:10px;}
+        .action-btn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:#f0f0f0;color:#333;text-decoration:none;margin-left:5px;cursor:pointer;border:none;}
+        .action-btn:hover{background:#ddd;}
+        .media-preview{max-width:100%;max-height:200px;margin-top:5px;border-radius:5px;}
+        .delete-image-btn{position:absolute;top:0;right:0;background:rgba(255,0,0,0.7);color:white;border:none;border-radius:50%;width:25px;height:25px;font-size:16px;line-height:1;cursor:pointer;}
+        .image-container{position:relative;display:inline-block;margin:5px;}
+        .instruction-section{margin-top:30px;padding-top:20px;border-top:2px solid #ddd;clear:both;}
+        .instruction-img{width:100%;max-height:400px;object-fit:contain;border:1px solid #ddd;border-radius:5px;cursor:pointer;}
+        .warning-text{color:#dc3545;font-size:0.9rem;margin-bottom:5px;text-align:center;}
+    </style></head>
+    <body>
+    <div class="stats-mini">👥 {{ User.query.count() }} | 🔨 {{ User.query.filter_by(user_type='artisan').count() }}</div>
+    <div class="container mt-5" style="max-width:600px;">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+            <div class="d-flex align-items-center">
+                <img src="{{ other.profile_image or '/uploads/placeholder.jpg' }}" style="width:50px;height:50px;border-radius:50%; object-fit:cover; margin-left:10px;">
+                <h4><a href="/user/{{ other.id }}">{{ other.full_name or other.username }}</a></h4>
+            </div>
+        </div>
+        <div class="message-container" id="messageContainer">
+            {% for m in messages %}
+                <div class="message-wrapper">
+                    {% if m.is_blocked %}
+                        <div class="blocked-message text-center p-2 bg-danger text-white rounded">[هذه الرسالة محظورة]</div>
+                    {% else %}
+                        <div class="{% if m.sender_id == current_user.id %}my-message{% else %}other-message{% endif %}">
+                            <div class="message-content">
+                                {% if m.content and (m.content.startswith('https://www.google.com/maps?q=') or m.content.startswith('https://maps.app.goo.gl/') or 'maps.google.com' in m.content) %}
+                                    <a href="{{ m.content }}" target="_blank" style="color: {% if m.sender_id == current_user.id %}white{% else %}blue{% endif %};">📍 موقع على الخريطة</a>
+                                {% elif m.content %}
+                                    {{ m.content }}
+                                {% endif %}
+                            </div>
+                            {% if m.images %}
+                                <div style="display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; justify-content: {% if m.sender_id == current_user.id %}flex-end{% else %}flex-start{% endif %};">
+                                    {% for img in m.images.split(',') %}
+                                        <div class="image-container">
+                                            <a href="{{ img }}" target="_blank">
+                                                <img src="{{ img }}" class="media-preview" style="width:100px; height:100px; object-fit:cover;">
+                                            </a>
+                                            {% if m.sender_id == current_user.id %}
+                                                <form method="POST" style="display:inline;" onsubmit="return confirm('هل أنت متأكد من حذف هذه الصورة؟');">
+                                                    <input type="hidden" name="action" value="delete_message_image">
+                                                    <input type="hidden" name="message_id" value="{{ m.id }}">
+                                                    <input type="hidden" name="image_url" value="{{ img }}">
+                                                    <button type="submit" class="delete-image-btn" title="حذف الصورة">×</button>
+                                                </form>
+                                            {% endif %}
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                            {% if m.voice %}
+                                <audio controls src="{{ m.voice }}" style="width:100%; margin-top:5px;"></audio>
+                            {% endif %}
+                            {% if m.video %}
+                                <video controls src="{{ m.video }}" style="max-width:100%; max-height:200px; margin-top:5px;"></video>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+        <form method="POST" enctype="multipart/form-data" id="chatForm">
+            <div class="warning-text">⚠️ يمنع مشاركة أرقام الهاتف، سيتم رفض أي رسالة تحتوي على رقم.</div>
+            <div class="mb-2"><textarea name="message" class="form-control" placeholder="اكتب رسالتك..." rows="2" id="messageText"></textarea></div>
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <button type="submit" class="btn btn-primary flex-grow-1">💬 إرسال</button>
+                <label for="images" class="action-btn">🖼️</label><input type="file" name="images" id="images" accept="image/*" multiple style="display: none;" onchange="document.getElementById('chatForm').submit();">
+                <label for="video" class="action-btn">◀️</label><input type="file" name="video" id="video" accept="video/*" style="display: none;" onchange="document.getElementById('chatForm').submit();">
+                <label for="voice" class="action-btn">🔊</label><input type="file" name="voice" id="voice" accept="audio/*" style="display: none;" onchange="document.getElementById('chatForm').submit();">
+                <button type="button" class="action-btn" id="smartLocationBtn" title="مشاركة موقعي">📍</button>
+            </div>
+            <div id="locationResultArea" style="display: none; margin-bottom: 10px;" class="p-2 border rounded">
+                <div class="input-group">
+                    <input type="text" id="manualLocationLink" class="form-control" placeholder="الصق رابط الموقع هنا">
+                    <button class="btn btn-primary" type="button" id="useLocationLink">إضافة</button>
+                </div>
+                <small class="text-muted">بعد لصق الرابط، اضغط "إضافة" ليظهر في رسالتك.</small>
+            </div>
+        </form>
+        <div class="instruction-section">
+            <div class="mt-3 text-center">
+                <img src="{{ url_for('static', filename='instruction.jpg') }}?v={{ range(1, 1000) | random }}" 
+                     alt="تعليمات إرسال الموقع" 
+                     class="instruction-img"
+                     onclick="openModal(this.src)">
+                <p class="text-muted small mt-1">تعليمات إرسال الموقع: اضغط على زر الموقع، افتح الخريطة، انسخ الرابط والصقه.</p>
+            </div>
+            {% if current_user.is_admin %}
+            <div class="mt-2 p-3 bg-light rounded border">
+                <h6>رفع صورة تعليمية جديدة</h6>
+                <form method="POST" action="{{ url_for('upload_instruction_image') }}" enctype="multipart/form-data" class="d-flex align-items-center gap-2">
+                    <input type="file" name="instruction_image" accept="image/*" class="form-control form-control-sm" style="width: auto;" required>
+                    <button type="submit" class="btn btn-sm btn-success">➕ رفع الصورة</button>
+                </form>
+                <small class="text-muted">هذه الصورة ستظهر لجميع المستخدمين.</small>
+            </div>
+            {% endif %}
+        </div>
+        <div class="modal fade" id="imageModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-body">
+                        <img src="" id="modalImage" style="width:100%;">
+                    </div>
+                </div>
+            </div>
+        </div>
+        <script>
+        var container = document.getElementById('messageContainer');
+        container.scrollTop = container.scrollHeight;
+        document.getElementById('smartLocationBtn').addEventListener('click', function() {
+            window.open('https://maps.google.com', '_blank');
+            document.getElementById('locationResultArea').style.display = 'block';
+        });
+        document.getElementById('useLocationLink').addEventListener('click', function() {
+            const link = document.getElementById('manualLocationLink').value.trim();
+            if (link) {
+                const msgField = document.getElementById('messageText');
+                msgField.value += (msgField.value ? '\\n' : '') + link;
+                document.getElementById('manualLocationLink').value = '';
+                document.getElementById('locationResultArea').style.display = 'none';
+            } else {
+                alert('الرجاء لصق الرابط أولاً.');
+            }
+        });
+        function openModal(src) {
+            document.getElementById('modalImage').src = src;
+            var modal = new bootstrap.Modal(document.getElementById('imageModal'));
+            modal.show();
+        }
+        </script>
+    </div></body></html>''', messages=messages, other=other, User=User)
 
 # ================== حذف الطلب ==================
 @app.route('/delete-request/<int:request_id>')
 @login_required
 def delete_request(request_id):
-    # مشابهة
-    pass
+    req = Request.query.get_or_404(request_id)
+    if req.client_id != current_user.id and not is_admin_user(current_user):
+        flash('غير مصرح لك بحذف هذا الطلب')
+        return redirect(url_for('index'))
+    offers = Offer.query.filter_by(request_id=request_id).all()
+    for offer in offers:
+        db.session.delete(offer)
+    db.session.delete(req)
+    db.session.commit()
+    flash('تم حذف الطلب وجميع العروض المرتبطة به بنجاح')
+    if is_admin_user(current_user):
+        return redirect(url_for('admin_dashboard'))
+    return redirect(url_for('index'))
 
 # ================== إغلاق الطلب ==================
 @app.route('/close-request/<int:request_id>')
 @login_required
 def close_request(request_id):
-    # مشابهة
-    pass
+    req = Request.query.get_or_404(request_id)
+    if req.client_id == current_user.id or is_admin_user(current_user):
+        req.status = 'cancelled'
+        db.session.commit()
+        flash('تم إغلاق الطلب')
+    else:
+        flash('غير مصرح')
+    return redirect(url_for('index'))
 
 # ================== لوحة الإدارة ==================
 @app.route('/admin')
 @login_required
 @admin_required
 def admin_dashboard():
-    # مشابهة
-    pass
+    total_users = User.query.count()
+    total_clients = User.query.filter_by(user_type='client').count()
+    total_artisans = User.query.filter_by(user_type='artisan').count()
+    total_requests = Request.query.count()
+    total_offers = Offer.query.count()
+    total_chats = Chat.query.count()
+    recent_users = User.query.order_by(User.created_at.desc()).limit(10).all()
+    recent_requests = Request.query.order_by(Request.created_at.desc()).limit(10).all()
+    chats = Chat.query.order_by(Chat.created_at.desc()).all()
+    chat_data = []
+    for c in chats:
+        client = User.query.get(c.client_id)
+        artisan = User.query.get(c.artisan_id)
+        last_msg = Message.query.filter_by(chat_id=c.id).order_by(Message.created_at.desc()).first()
+        chat_data.append({'chat': c, 'client': client, 'artisan': artisan, 'last_msg': last_msg})
+    return render_template_string('''
+    <!DOCTYPE html><html dir="rtl"><head><title>لوحة الإدارة</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>.stats-mini{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.7);color:#fff;padding:5px 10px;border-radius:20px;font-size:12px;z-index:9999;opacity:0.6;}</style>
+    </head>
+    <body>
+    <div class="stats-mini">👥 {{ total_users }} | 🔨 {{ total_artisans }}</div>
+    <div class="container mt-5">
+        <h1 class="text-center">لوحة الإدارة</h1>
+        <div class="mb-3"><a href="/" class="btn btn-secondary">الرئيسية</a> <a href="/logout" class="btn btn-danger">تسجيل خروج</a></div>
+        <div class="row">
+            <div class="col-md-3"><div class="card text-white bg-primary mb-3"><div class="card-body"><h5 class="card-title">المستخدمين</h5><p class="card-text display-6">{{ total_users }}</p><p>زبائن: {{ total_clients }} | حرفيين: {{ total_artisans }}</p></div></div></div>
+            <div class="col-md-3"><div class="card text-white bg-success mb-3"><div class="card-body"><h5 class="card-title">الطلبات</h5><p class="card-text display-6">{{ total_requests }}</p></div></div></div>
+            <div class="col-md-3"><div class="card text-white bg-warning mb-3"><div class="card-body"><h5 class="card-title">العروض</h5><p class="card-text display-6">{{ total_offers }}</p></div></div></div>
+            <div class="col-md-3"><div class="card text-white bg-info mb-3"><div class="card-body"><h5 class="card-title">المحادثات</h5><p class="card-text display-6">{{ total_chats }}</p></div></div></div>
+        </div>
+        <div class="card admin-card"><div class="card-header bg-dark text-white">أحدث المستخدمين</div><div class="card-body"><table class="table table-sm"><thead><tr><th>#</th><th>الاسم</th><th>البريد</th><th>النوع</th><th>تاريخ التسجيل</th></tr></thead><tbody>{% for u in recent_users %}<tr><td>{{ u.id }}</td><td><a href="/user/{{ u.id }}">{{ u.full_name or u.username }}</a></td><td>{{ u.email }}</td><td>{% if u.user_type == 'client' %}زبون{% else %}حرفي{% endif %}{% if u.is_admin %} (أدمن){% endif %}</td><td>{{ u.created_at.strftime('%Y-%m-%d') }}</td></tr>{% endfor %}</tbody></table></div></div>
+        <div class="card admin-card"><div class="card-header bg-dark text-white">أحدث الطلبات</div><div class="card-body"><table class="table table-sm"><thead><tr><th>#</th><th>العنوان</th><th>صاحب الطلب</th><th>التخصص</th><th>الحي</th><th>التاريخ</th><th>إجراءات</th></tr></thead><tbody>{% for r in recent_requests %}<tr><td>{{ r.id }}</td><td><a href="/view-offers/{{ r.id }}">{{ r.title }}</a></td><td><a href="/user/{{ r.client.id }}">{{ r.client.full_name or r.client.username }}</a></td><td>{{ r.specialty }}</td><td>{{ r.district }}</td><td>{{ time_ago(r.created_at) }}</td><td><a href="/delete-request/{{ r.id }}" class="btn btn-danger btn-sm" onclick="return confirm('هل أنت متأكد؟')">حذف</a></td></tr>{% endfor %}</tbody></table></div></div>
+        <div class="card admin-card"><div class="card-header bg-dark text-white">جميع المحادثات</div><div class="card-body"><div class="list-group">{% for item in chat_data %}<a href="/chat/{{ item.chat.id }}" class="list-group-item list-group-item-action"><div class="d-flex justify-content-between"><div><strong>طلب #{{ item.chat.request_id }}</strong> - <span>زبون: {{ item.client.full_name or item.client.username }}</span> - <span>حرفي: {{ item.artisan.full_name or item.artisan.username }}</span></div><small>{{ time_ago(item.chat.created_at) }}</small></div>{% if item.last_msg %}<small class="text-muted">آخر رسالة: {{ item.last_msg.content[:50] }}</small>{% endif %}</a>{% else %}<p class="text-muted">لا توجد محادثات بعد.</p>{% endfor %}</div></div></div>
+    </div>
+    </body></html>''', total_users=total_users, total_clients=total_clients, total_artisans=total_artisans,
+    total_requests=total_requests, total_offers=total_offers, total_chats=total_chats,
+    recent_users=recent_users, recent_requests=recent_requests, chat_data=chat_data, time_ago=time_ago)
 
 # ================== رفع الصورة التعليمية ==================
 @app.route('/upload-instruction-image', methods=['POST'])
 @login_required
 @admin_required
 def upload_instruction_image():
-    # مشابهة
-    pass
+    if 'instruction_image' not in request.files:
+        flash('لم يتم اختيار ملف', 'danger')
+        return redirect(request.referrer or url_for('index'))
+    file = request.files['instruction_image']
+    if file.filename == '':
+        flash('الملف فارغ', 'danger')
+        return redirect(request.referrer or url_for('index'))
+    if file and allowed_file(file.filename):
+        try:
+            filename = 'instruction.jpg'
+            filepath = os.path.join(STATIC_FOLDER, filename)
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            file.save(filepath)
+            flash('✅ تم رفع الصورة التعليمية بنجاح', 'success')
+            print(f"✅ تم حفظ الصورة التعليمية في: {filepath}")
+        except Exception as e:
+            flash(f'❌ خطأ في حفظ الصورة: {str(e)}', 'danger')
+            print(f"❌ خطأ في رفع الصورة التعليمية: {e}")
+    else:
+        flash('نوع الملف غير مسموح به', 'danger')
+    return redirect(request.referrer or url_for('index'))
 
-# ================== المسارات القديمة (للتوافق) ==================
+# ================== مسارات التوافق (تحويل) ==================
 @app.route('/client-dashboard')
 @login_required
 def client_dashboard():
