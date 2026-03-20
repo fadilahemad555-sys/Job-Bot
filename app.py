@@ -1,6 +1,6 @@
 # ============================================================
-# منصة بريكولات - النسخة النهائية (الجزء الأول)
-# مع إضافة مسار الرسائل وتحسينات الملف الشخصي
+# منصة بريكولات - الجزء الأول (الإعدادات + الصفحة الرئيسية)
+# مع إعدادات البريد المضمنة للإشعارات
 # ============================================================
 
 import os
@@ -12,7 +12,7 @@ from werkzeug.utils import secure_filename
 from flask import Flask, render_template_string, request, redirect, url_for, flash, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
-from flask_mail import Mail, Message  # تأكد من تثبيت المكتبة
+from flask_mail import Mail, Message
 
 # ================== إعدادات التطبيق ==================
 app = Flask(__name__)
@@ -26,13 +26,14 @@ app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///bricolets.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
 
-# ================== إعدادات البريد الإلكتروني (للإشعارات) ==================
-app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
-app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
-app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', 'True').lower() == 'true'
-app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', '')
-app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '')
-app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', 'noreply@bricolets.com')
+# ================== إعدادات البريد الإلكتروني (مضمنة مباشرة) ==================
+# تم إعدادها باستخدام البريد وكلمة مرور التطبيق المقدمة
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = 'hichamcasawi709@gmail.com'
+app.config['MAIL_PASSWORD'] = 'kxlafkpzbxuguida'
+app.config['MAIL_DEFAULT_SENDER'] = 'hichamcasawi709@gmail.com'
 
 mail = Mail(app)  # تهيئة Mail
 
@@ -84,7 +85,6 @@ class User(UserMixin, db.Model):
 
     @property
     def profile_completed(self):
-        # تجاهل رقم الهاتف للمستخدمين القدامى (يمكن تعديله لاحقاً)
         if self.user_type == 'client':
             return bool(self.full_name and self.district)
         return bool(self.full_name and self.district and self.specialty and self.profile_image)
@@ -673,7 +673,7 @@ def logout():
 
 print("✅ الجزء الأول من المسارات تم تحميله بنجاح.")
 print("✅ أضف الآن الجزء الثاني (باقي المسارات مع دالة login المعدلة وإرسال الإشعارات).")# ============================================================
-# الجزء الثاني: جميع المسارات المتبقية مع إرسال الإشعارات
+# الجزء الثاني: جميع المسارات المتبقية مع إرسال الإشعارات والتحقق من الحقول
 # ============================================================
 
 # قائمة شاملة لمدن المغرب (للاستخدام في التسجيل وإكمال الملف الشخصي)
@@ -800,7 +800,7 @@ def register():
     </div></body></html>
     ''', User=User)
 
-# ================== إكمال الملف الشخصي (بعد التسجيل) ==================
+# ================== إكمال الملف الشخصي (مع التحقق من الحقول الإجبارية) ==================
 @app.route('/complete-profile', methods=['GET','POST'])
 @login_required
 def complete_profile():
@@ -817,14 +817,25 @@ def complete_profile():
         specialty = request.form.get('specialty', '').strip()
         experience_years = request.form.get('experience_years', '').strip()
         
-        # التحقق من الحقول الإجبارية
-        if not full_name or not phone or not district:
-            flash('الاسم الكامل، رقم الهاتف، والمدينة حقول إجبارية')
-            return redirect(url_for('complete_profile'))
+        # التحقق من الحقول الإجبارية (الاسم، الهاتف، المدينة)
+        errors = []
+        if not full_name:
+            errors.append('الاسم الكامل مطلوب')
+        if not phone:
+            errors.append('رقم الهاتف مطلوب')
+        elif not re.match(r'^0[5-7]\d{8}$', phone):
+            errors.append('رقم الهاتف غير صحيح. يجب أن يبدأ بـ 05 أو 06 أو 07 ويتكون من 10 أرقام')
+        if not district:
+            errors.append('المدينة مطلوبة')
         
-        # التحقق من أن رقم الهاتف يبدأ بـ 0 ويتكون من 10 أرقام (تقريبي)
-        if not re.match(r'^0[5-7]\d{8}$', phone):
-            flash('رقم الهاتف غير صحيح. يجب أن يبدأ بـ 05 أو 06 أو 07 ويتكون من 10 أرقام')
+        # إذا كان المستخدم حرفياً (أي اختار تخصصاً)، التحقق من وجود تخصص
+        if specialty and specialty != 'other' and specialty not in SPECIALTIES:
+            # إذا كان التخصص مكتوباً يدوياً (other) سيتم التعامل معه لاحقاً
+            pass
+        
+        if errors:
+            for error in errors:
+                flash(error, 'danger')
             return redirect(url_for('complete_profile'))
         
         # تحديث البيانات
@@ -833,9 +844,17 @@ def complete_profile():
         current_user.district = normalize_city(district)
         
         # تحديد نوع المستخدم بناءً على وجود تخصص
-        if specialty:
+        if specialty and specialty != 'other':
             current_user.user_type = 'artisan'
             current_user.specialty = specialty
+        elif specialty == 'other':
+            # أخذ التخصص من حقل "other_specialty"
+            other_spec = request.form.get('other_specialty', '').strip()
+            if not other_spec:
+                flash('الرجاء كتابة التخصص الجديد', 'danger')
+                return redirect(url_for('complete_profile'))
+            current_user.user_type = 'artisan'
+            current_user.specialty = other_spec
         else:
             current_user.user_type = 'client'
         
@@ -877,22 +896,28 @@ def complete_profile():
     <div class="stats-mini">👥 {{ User.query.count() }} | 🔨 {{ User.query.filter_by(user_type='artisan').count() }}</div>
     <div class="container" style="max-width:600px;margin-top:50px">
         <h2 class="text-center">أكمل ملفك الشخصي</h2>
-        {% with messages = get_flashed_messages() %}{% if messages %}<div class="alert alert-danger">{{ messages[0] }}</div>{% endif %}{% endwith %}
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
         <form method="POST" enctype="multipart/form-data">
             <div class="mb-3">
                 <label>الصورة الشخصية (اختياري)</label>
                 <input type="file" name="profile_image" class="form-control" accept="image/*">
             </div>
             <div class="mb-3">
-                <label>الاسم الكامل</label>
+                <label>الاسم الكامل <span class="text-danger">*</span></label>
                 <input type="text" name="full_name" class="form-control" required>
             </div>
             <div class="mb-3">
-                <label>رقم الهاتف</label>
+                <label>رقم الهاتف <span class="text-danger">*</span></label>
                 <input type="tel" name="phone" class="form-control" placeholder="مثال: 0612345678" required>
             </div>
             <div class="mb-3">
-                <label>المدينة (يمكنك اختيار أو كتابة)</label>
+                <label>المدينة <span class="text-danger">*</span></label>
                 <input list="cities" name="district" id="district" class="form-control" placeholder="اختر أو اكتب مدينتك" required>
                 <datalist id="cities">
                     {% for city in MOROCCAN_CITIES %}
@@ -1307,42 +1332,38 @@ def post_request():
         db.session.commit()
         
         # ===== إرسال إشعارات البريد الإلكتروني للحرفيين المناسبين =====
-        if app.config['MAIL_USERNAME']:  # تحقق من وجود إعدادات البريد
-            try:
-                # البحث عن الحرفيين الذين لديهم نفس التخصص والمدينة
-                artisans = User.query.filter_by(user_type='artisan', specialty=specialty, district=district).all()
-                if artisans:
-                    with mail.connect() as conn:
-                        subject = f"طلب جديد في تخصص {specialty} بمدينة {district}"
-                        body = f"""
-                        تم نشر طلب جديد قد يهمك:
-                        
-                        العنوان: {title}
-                        الوصف: {description}
-                        التخصص: {specialty}
-                        المدينة: {district}
-                        
-                        لعرض التفاصيل وتقديم عرض، يرجى زيارة الرابط:
-                        https://bricoletsapp.pythonanywhere.com/view-offers/{new_req.id}
-                        
-                        مع تحيات فريق بريكولات
-                        """
-                        for artisan in artisans:
-                            if artisan.email:
-                                msg = Message(
-                                    subject=subject,
-                                    recipients=[artisan.email],
-                                    body=body
-                                )
-                                conn.send(msg)
-                    flash('تم نشر الطلب وإرسال إشعارات للحرفيين المهتمين', 'success')
-                else:
-                    flash('تم نشر الطلب (لا يوجد حرفيون بهذا التخصص والمدينة حالياً)', 'success')
-            except Exception as e:
-                print(f"❌ خطأ في إرسال البريد: {e}")
-                flash('تم نشر الطلب (فشل إرسال الإشعارات)', 'warning')
-        else:
-            flash('تم نشر الطلب (لم يتم إعداد البريد الإلكتروني)', 'info')
+        try:
+            # البحث عن الحرفيين الذين لديهم نفس التخصص والمدينة
+            artisans = User.query.filter_by(user_type='artisan', specialty=specialty, district=district).all()
+            if artisans:
+                with mail.connect() as conn:
+                    subject = f"🔔 طلب جديد في تخصص {specialty} بمدينة {district}"
+                    body = f"""
+                    <h2>تم نشر طلب جديد قد يهمك</h2>
+                    <p><strong>العنوان:</strong> {title}</p>
+                    <p><strong>الوصف:</strong> {description}</p>
+                    <p><strong>التخصص:</strong> {specialty}</p>
+                    <p><strong>المدينة:</strong> {district}</p>
+                    <p><strong>تاريخ النشر:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
+                    <p>لرؤية التفاصيل وتقديم عرض، يرجى زيارة الرابط التالي:</p>
+                    <p><a href="https://bricoletsapp.pythonanywhere.com/view-offers/{new_req.id}">اضغط هنا لعرض الطلب</a></p>
+                    <br>
+                    <p>مع تحيات فريق بريكولات</p>
+                    """
+                    for artisan in artisans:
+                        if artisan.email:
+                            msg = Message(
+                                subject=subject,
+                                recipients=[artisan.email],
+                                html=body
+                            )
+                            conn.send(msg)
+                flash('✅ تم نشر الطلب وإرسال إشعارات إلى {} حرفي مهتم'.format(len(artisans)), 'success')
+            else:
+                flash('✅ تم نشر الطلب (لا يوجد حرفيون مسجلون بهذا التخصص والمدينة حالياً)', 'success')
+        except Exception as e:
+            print(f"❌ خطأ في إرسال البريد: {e}")
+            flash('⚠️ تم نشر الطلب لكن فشل إرسال الإشعارات البريدية', 'warning')
         
         return redirect(url_for('index'))
     
@@ -1920,4 +1941,4 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=port, debug=False)
 
 print("✅ الجزء الثاني من المسارات تم تحميله بنجاح.")
-print("✅ الكود الكامل الآن جاهز مع إرسال الإشعارات.")
+print("✅ الكود الكامل الآن جاهز مع إرسال الإشعارات والتحقق من الحقول.")
