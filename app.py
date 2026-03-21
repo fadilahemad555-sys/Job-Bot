@@ -815,7 +815,7 @@ def logout():
 
 print("✅ الجزء الأول من المسارات تم تحميله بنجاح.")
 print("✅ أضف الآن الجزء الثاني (باقي المسارات) لإكمال الموقع.")# ============================================================
-# الجزء الثاني: جميع المسارات المتبقية (معدل نهائي)
+# الجزء الثاني: جميع المسارات المتبقية (نسخة اختبار بسيطة)
 # ============================================================
 
 # قائمة شاملة لمدن المغرب (للاستخدام في التسجيل وإكمال الملف الشخصي)
@@ -1406,7 +1406,7 @@ def search():
     </body></html>
     ''', requests=requests, User=User)
 
-# ================== نشر طلب جديد (يرسل لجميع المستخدمين ذوي البريد الصالح) ==================
+# ================== نشر طلب جديد (اختبار: إرسال بريد واحد فقط للأدمن) ==================
 @app.route('/post-request', methods=['GET','POST'])
 @login_required
 def post_request():
@@ -1436,37 +1436,29 @@ def post_request():
         db.session.add(new_req)
         db.session.commit()
 
-        # ===== إرسال إشعارات لجميع المستخدمين ذوي البريد الصالح =====
+        # ===== إرسال بريد واحد فقط للأدمن =====
         try:
-            all_users = User.query.filter(User.email.isnot(None), User.email != '').all()
-            print(f"📧 عدد المستخدمين الذين لديهم بريد: {len(all_users)}")
-            sent_count = 0
-            for user in all_users:
-                try:
-                    subject = f"🔔 طلب جديد: {title}"
-                    body = f"""
-                    <h2>طلب جديد على المنصة</h2>
-                    <p><strong>العنوان:</strong> {title}</p>
-                    <p><strong>الوصف:</strong> {description}</p>
-                    <p><strong>التخصص:</strong> {specialty}</p>
-                    <p><strong>المدينة:</strong> {district}</p>
-                    <p><a href="https://bricoletsapp.pythonanywhere.com/view-offers/{new_req.id}">عرض التفاصيل</a></p>
-                    <p>مع تحيات فريق بريكولات</p>
-                    """
-                    msg = Message(subject=subject, recipients=[user.email], html=body)
-                    mail.send(msg)
-                    sent_count += 1
-                    print(f"✅ تم الإرسال إلى {user.email}")
-                except Exception as e:
-                    print(f"❌ فشل الإرسال إلى {user.email}: {e}")
-            if sent_count > 0:
-                flash(f'✅ تم نشر الطلب وإرسال إشعارات إلى {sent_count} من {len(all_users)} مستخدم', 'success')
-            else:
-                flash('⚠️ لم يتم إرسال أي إشعار، راجع السجلات.', 'warning')
+            print("📧 محاولة إرسال بريد للأدمن...")
+            msg = Message(
+                subject=f"طلب جديد: {title}",
+                recipients=['hichamcasawi709@gmail.com'],
+                html=f"""
+                <h2>طلب جديد</h2>
+                <p><strong>العنوان:</strong> {title}</p>
+                <p><strong>الوصف:</strong> {description}</p>
+                <p><strong>التخصص:</strong> {specialty}</p>
+                <p><strong>المدينة:</strong> {district}</p>
+                <p><a href="https://bricoletsapp.pythonanywhere.com/view-offers/{new_req.id}">عرض الطلب</a></p>
+                """
+            )
+            mail.send(msg)
+            print("✅ تم إرسال البريد للأدمن بنجاح")
+            flash('✅ تم نشر الطلب وتم إرسال بريد للأدمن.', 'success')
         except Exception as e:
             import traceback
+            print("❌ فشل إرسال البريد للأدمن:")
             print(traceback.format_exc())
-            flash('⚠️ حدث خطأ أثناء إرسال الإشعارات', 'warning')
+            flash('⚠️ تم نشر الطلب لكن فشل إرسال البريد للأدمن.', 'warning')
 
         return redirect(url_for('index'))
 
@@ -1808,27 +1800,29 @@ def admin_dashboard():
                 <div class="table-responsive">
                     <table class="table table-sm table-bordered">
                         <thead>
-                              <th>#</th><th>الاسم</th><th>التخصص</th><th>المدينة</th><th>البريد الإلكتروني</th><th>رقم الهاتف</th><th>تاريخ التسجيل</th>
+                             \n
+                                <th>#</th><th>الاسم</th><th>التخصص</th><th>المدينة</th><th>البريد الإلكتروني</th><th>رقم الهاتف</th><th>تاريخ التسجيل</th>
+                             \n
                         </thead>
                         <tbody>
                             {% for a in all_artisans %}
-                              <tr>
-                                  <td>{{ a.id }}</td>
-                                  <td><a href="/user/{{ a.id }}">{{ a.full_name or a.username }}</a></td>
-                                  <td>{{ a.specialty }}</td>
-                                  <td>{{ a.district or '-' }}</td>
-                                  <td>{{ a.email }}</td>
-                                  <td>{{ a.phone or '-' }}</td>
-                                  <td>{{ a.created_at.strftime('%Y-%m-%d') }}</td>
-                              </tr>
+                             \n
+                                   \n{{ a.id }}\n
+                                   \n<a href="/user/{{ a.id }}">{{ a.full_name or a.username }}</a>\n
+                                   \n{{ a.specialty }}\n
+                                   \n{{ a.district or '-' }}\n
+                                   \n{{ a.email }}\n
+                                   \n{{ a.phone or '-' }}\n
+                                   \n{{ a.created_at.strftime('%Y-%m-%d') }}\n
+                             \n
                             {% endfor %}
                         </tbody>
-                    </table>
+                     \n
                 </div>
             </div>
         </div>
-        <div class="card admin-card"><div class="card-header bg-dark text-white">أحدث المستخدمين</div><div class="card-body"><table class="table table-sm"><thead> <th>#</th><th>الاسم</th><th>البريد</th><th>النوع</th><th>تاريخ التسجيل</th> </thead><tbody>{% for u in recent_users %} <tr><td>{{ u.id }}</td><td><a href="/user/{{ u.id }}">{{ u.full_name or u.username }}</a></td><td>{{ u.email }}</td><td>{% if u.user_type == 'client' %}زبون{% else %}حرفي{% endif %}{% if u.is_admin %} (أدمن){% endif %}</td><td>{{ u.created_at.strftime('%Y-%m-%d') }}</td></tr>{% endfor %}</tbody></table></div></div>
-        <div class="card admin-card"><div class="card-header bg-dark text-white">أحدث الطلبات</div><div class="card-body"><table class="table table-sm"><thead> <th>#</th><th>العنوان</th><th>صاحب الطلب</th><th>التخصص</th><th>الحي</th><th>التاريخ</th><th>إجراءات</th> </thead><tbody>{% for r in recent_requests %} <tr><td>{{ r.id }}</td><td><a href="/view-offers/{{ r.id }}">{{ r.title }}</a></td><td><a href="/user/{{ r.client.id }}">{{ r.client.full_name or r.client.username }}</a></td><td>{{ r.specialty }}</td><td>{{ r.district }}</td><td>{{ time_ago(r.created_at) }}</td><td><a href="/delete-request/{{ r.id }}" class="btn btn-danger btn-sm" onclick="return confirm('هل أنت متأكد؟')">حذف</a></td></tr>{% endfor %}</tbody></table></div></div>
+        <div class="card admin-card"><div class="card-header bg-dark text-white">أحدث المستخدمين</div><div class="card-body"><table class="table table-sm"><thead> <th>#</th><th>الاسم</th><th>البريد</th><th>النوع</th><th>تاريخ التسجيل</th> </thead><tbody>{% for u in recent_users %}  \n{{ u.id }}\n \n<a href="/user/{{ u.id }}">{{ u.full_name or u.username }}</a>\n \n{{ u.email }}\n \n{% if u.user_type == 'client' %}زبون{% else %}حرفي{% endif %}{% if u.is_admin %} (أدمن){% endif %}\n \n{{ u.created_at.strftime('%Y-%m-%d') }}\n \n{% endfor %}</tbody> \n</div></div>
+        <div class="card admin-card"><div class="card-header bg-dark text-white">أحدث الطلبات</div><div class="card-body"><table class="table table-sm"><thead> <th>#</th><th>العنوان</th><th>صاحب الطلب</th><th>التخصص</th><th>الحي</th><th>التاريخ</th><th>إجراءات</th> </thead><tbody>{% for r in recent_requests %}  \n{{ r.id }}\n \n<a href="/view-offers/{{ r.id }}">{{ r.title }}</a>\n \n<a href="/user/{{ r.client.id }}">{{ r.client.full_name or r.client.username }}</a>\n \n{{ r.specialty }}\n \n{{ r.district }}\n \n{{ time_ago(r.created_at) }}\n \n<a href="/delete-request/{{ r.id }}" class="btn btn-danger btn-sm" onclick="return confirm('هل أنت متأكد؟')">حذف</a>\n \n{% endfor %}</tbody> \n</div></div>
         <div class="card admin-card"><div class="card-header bg-dark text-white">جميع المحادثات</div><div class="card-body"><div class="list-group">{% for item in chat_data %}<a href="/chat/{{ item.chat.id }}" class="list-group-item list-group-item-action"><div class="d-flex justify-content-between"><div><strong>طلب #{{ item.chat.request_id }}</strong> - <span>زبون: {{ item.client.full_name or item.client.username }}</span> - <span>حرفي: {{ item.artisan.full_name or item.artisan.username }}</span></div><small>{{ time_ago(item.chat.created_at) }}</small></div>{% if item.last_msg %}<small class="text-muted">آخر رسالة: {{ item.last_msg.content[:50] }}</small>{% endif %}</a>{% else %}<p class="text-muted">لا توجد محادثات بعد.</p>{% endfor %}</div></div></div>
     </div>
     </body></html>''', total_users=total_users, total_clients=total_clients, total_artisans=total_artisans,
@@ -1864,21 +1858,18 @@ def upload_instruction_image():
         flash('نوع الملف غير مسموح به', 'danger')
     return redirect(request.referrer or url_for('index'))
 
-# ================== مسار اختبار البريد (بسيط) ==================
-@app.route('/test-email-simple')
+# ================== مسار اختبار البريد ==================
+@app.route('/test-email')
 @login_required
 @admin_required
-def test_email_simple():
+def test_email():
     try:
-        msg = Message(
-            subject="اختبار بسيط",
-            recipients=['hichamcasawi709@gmail.com'],
-            html="<h1>الاختبار ناجح</h1>"
-        )
+        msg = Message("اختبار", recipients=['hichamcasawi709@gmail.com'], html="<h1>نجح</h1>")
         mail.send(msg)
-        return "✅ تم إرسال البريد بنجاح"
+        return "✅ تم الإرسال بنجاح"
     except Exception as e:
-        return f"❌ فشل: {e}"
+        import traceback
+        return f"❌ فشل: {e}<br><pre>{traceback.format_exc()}</pre>"
 
 # ================== مسار عرض المستخدمين ذوي البريد ==================
 @app.route('/list-users-email')
