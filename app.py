@@ -1,4 +1,3 @@
-
 # ============================================================
 # منصة بريكولات - الجزء الأول (الإعدادات + الصفحة الرئيسية)
 # مع زر تحميل APK وإشعار تسجيل الخروج ومسار الدردشة
@@ -32,19 +31,18 @@ app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
 app.config['MAIL_USERNAME'] = 'hichamcasawi709@gmail.com'
-app.config['MAIL_PASSWORD'] = 'kxlafkpzbxuguida'  # استخدم كلمة المرور المقدمة
+app.config['MAIL_PASSWORD'] = 'kxlafkpzbxuguida'  # كلمة المرور الثابتة
 app.config['MAIL_DEFAULT_SENDER'] = 'hichamcasawi709@gmail.com'
 app.config['MAIL_USE_SSL'] = False
 app.config['MAIL_SUPPRESS_SEND'] = False
-app.config['MAIL_DEBUG'] = True  # سيساعد في عرض الأخطاء
+app.config['MAIL_DEBUG'] = True  # لعرض الأخطاء في السجلات
 
 # إنشاء كائن Mail بعد الإعدادات
 mail = Mail(app)
 
-# اختبار الاتصال بالبريد فور بدء التطبيق (اختياري، لكن يساعد في اكتشاف الأخطاء مبكراً)
+# اختبار الاتصال بالبريد فور بدء التطبيق
 try:
     with app.app_context():
-        # محاولة الاتصال بخادم البريد (بدون إرسال)
         mail.connect()
         print("✅ اتصال البريد الإلكتروني ناجح.")
 except Exception as e:
@@ -1460,8 +1458,10 @@ def post_request():
         # ===== إرسال إشعارات البريد الإلكتروني لجميع المهتمين (نفس التخصص والمدينة) =====
         try:
             interested_users = User.query.filter_by(specialty=specialty, district=district).all()
+            print(f"🔍 [DEBUG] تم العثور على {len(interested_users)} مستخدم مهتم (specialty={specialty}, district={district})")
+            for u in interested_users:
+                print(f"   - {u.id}: {u.email} | {u.full_name}")
             if interested_users:
-                print(f"🔍 وجدنا {len(interested_users)} مستخدم مهتم: {[(u.id, u.email, u.full_name) for u in interested_users]}")
                 with mail.connect() as conn:
                     subject = f"🔔 طلب جديد في تخصص {specialty} بمدينة {district}"
                     body = f"""
@@ -1844,21 +1844,21 @@ def admin_dashboard():
                 <div class="table-responsive">
                     <table class="table table-sm table-bordered">
                         <thead>
-                            <tr>
+                             <tr>
                                 <th>#</th><th>الاسم</th><th>التخصص</th><th>المدينة</th><th>البريد الإلكتروني</th><th>رقم الهاتف</th><th>تاريخ التسجيل</th>
-                            </tr>
+                             </tr>
                         </thead>
                         <tbody>
                             {% for a in all_artisans %}
-                            <tr>
-                                <td>{{ a.id }}</td>
-                                <td><a href="/user/{{ a.id }}">{{ a.full_name or a.username }}</a></td>
-                                <td>{{ a.specialty }}</td>
-                                <td>{{ a.district or '-' }}</td>
-                                <td>{{ a.email }}</td>
-                                <td>{{ a.phone or '-' }}</td>
-                                <td>{{ a.created_at.strftime('%Y-%m-%d') }}</td>
-                            </tr>
+                             <tr>
+                                 <td>{{ a.id }}</td>
+                                 <td><a href="/user/{{ a.id }}">{{ a.full_name or a.username }}</a></td>
+                                 <td>{{ a.specialty }}</td>
+                                 <td>{{ a.district or '-' }}</td>
+                                 <td>{{ a.email }}</td>
+                                 <td>{{ a.phone or '-' }}</td>
+                                 <td>{{ a.created_at.strftime('%Y-%m-%d') }}</td>
+                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
