@@ -822,7 +822,7 @@ def logout():
 
 print("✅ الجزء الأول من المسارات تم تحميله بنجاح.")
 print("✅ أضف الآن الجزء الثاني (باقي المسارات) لإكمال الموقع.")# ============================================================
-# الجزء الثاني: جميع المسارات المتبقية (معدل)
+# الجزء الثاني: جميع المسارات المتبقية (نهائي)
 # ============================================================
 
 # قائمة شاملة لمدن المغرب (للاستخدام في التسجيل وإكمال الملف الشخصي)
@@ -1413,7 +1413,7 @@ def search():
     </body></html>
     ''', requests=requests, User=User)
 
-# ================== نشر طلب جديد (مع إرسال إشعارات قوية للتجربة) ==================
+# ================== نشر طلب جديد (مع إرسال الإشعارات للمهتمين) ==================
 @app.route('/post-request', methods=['GET','POST'])
 @login_required
 def post_request():
@@ -1443,64 +1443,39 @@ def post_request():
         db.session.add(new_req)
         db.session.commit()
 
-        # ===== إرسال إشعارات قوية للتجربة =====
-        print("="*50)
-        print("🚀 بدء تجربة إرسال البريد الإلكتروني")
-        print(f"الطلب: {title} | تخصص: {specialty} | مدينة: {district}")
-        print("="*50)
-
+        # ===== إرسال إشعارات البريد الإلكتروني للمستخدمين المهتمين =====
         try:
-            # 1. إرسال بريد تجريبي إلى الأدمن مباشرة
-            admin_email = 'hichamcasawi709@gmail.com'
-            print(f"📧 محاولة إرسال بريد تجريبي إلى {admin_email} ...")
-            test_subject = f"🔔 [تجربة] طلب جديد: {title}"
-            test_body = f"""
-            <h2>طلب جديد (رسالة تجريبية)</h2>
-            <p><strong>العنوان:</strong> {title}</p>
-            <p><strong>الوصف:</strong> {description}</p>
-            <p><strong>التخصص:</strong> {specialty}</p>
-            <p><strong>المدينة:</strong> {district}</p>
-            <p><a href="https://bricoletsapp.pythonanywhere.com/view-offers/{new_req.id}">عرض الطلب</a></p>
-            <p>هذه رسالة تجريبية للتأكد من عمل البريد.</p>
-            """
-            msg = Message(subject=test_subject, recipients=[admin_email], html=test_body)
-            mail.send(msg)
-            print(f"✅ تم إرسال البريد التجريبي إلى {admin_email}")
-
-            # 2. الآن جلب جميع المستخدمين ذوي البريد الصالح
-            all_users_with_email = User.query.filter(User.email.isnot(None), User.email != '').all()
-            print(f"🔍 عدد المستخدمين ذوي البريد الإلكتروني: {len(all_users_with_email)}")
-            for u in all_users_with_email:
-                print(f"   - {u.id}: {u.email} | {u.full_name}")
-
-            if all_users_with_email:
+            # المستخدمون الذين لهم نفس التخصص والمدينة
+            interested_users = User.query.filter_by(specialty=specialty, district=district).all()
+            if interested_users:
                 with mail.connect() as conn:
-                    subject = f"🔔 طلب جديد: {title} (تخصص {specialty} - مدينة {district})"
+                    subject = f"🔔 طلب جديد في تخصص {specialty} بمدينة {district}"
                     body = f"""
                     <h2>تم نشر طلب جديد قد يهمك</h2>
                     <p><strong>العنوان:</strong> {title}</p>
                     <p><strong>الوصف:</strong> {description}</p>
-                    <p><strong>التخصص المطلوب:</strong> {specialty}</p>
+                    <p><strong>التخصص:</strong> {specialty}</p>
                     <p><strong>المدينة:</strong> {district}</p>
                     <p><strong>تاريخ النشر:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
+                    <p>لرؤية التفاصيل وتقديم عرض، يرجى زيارة الرابط التالي:</p>
                     <p><a href="https://bricoletsapp.pythonanywhere.com/view-offers/{new_req.id}">اضغط هنا لعرض الطلب</a></p>
                     <br><p>مع تحيات فريق بريكولات</p>
                     """
                     sent_count = 0
-                    for user in all_users_with_email:
+                    for user in interested_users:
                         if user.email:
                             try:
                                 msg = Message(subject=subject, recipients=[user.email], html=body)
                                 conn.send(msg)
                                 sent_count += 1
-                                print(f"✅ تم إرسال البريد إلى {user.email}")
                             except Exception as e:
-                                print(f"❌ فشل إرسال البريد إلى {user.email}: {e}")
-                    flash(f'✅ تم نشر الطلب وإرسال إشعارات إلى {sent_count} من {len(all_users_with_email)} مستخدم', 'success')
+                                print(f"⚠️ فشل إرسال البريد إلى {user.email}: {e}")
+                    if sent_count > 0:
+                        flash(f'✅ تم نشر الطلب وإرسال إشعارات إلى {sent_count} من {len(interested_users)} مستخدم مهتم', 'success')
+                    else:
+                        flash('⚠️ تم نشر الطلب لكن فشل إرسال الإشعارات (لا توجد عناوين بريد صالحة)', 'warning')
             else:
-                flash('⚠️ تم نشر الطلب، ولكن لا يوجد مستخدمون لديهم بريد إلكتروني صالح.', 'warning')
-                print("⚠️ لا يوجد مستخدمون لديهم بريد إلكتروني صالح.")
-
+                flash('✅ تم نشر الطلب (لا يوجد مستخدمون مهتمون بهذا التخصص والمدينة حالياً)', 'success')
         except Exception as e:
             print(f"❌ خطأ عام في إرسال البريد: {e}")
             flash('⚠️ تم نشر الطلب لكن فشل إرسال الإشعارات البريدية', 'warning')
@@ -1848,13 +1823,13 @@ def admin_dashboard():
                 <div class="table-responsive">
                     <table class="table table-sm table-bordered">
                         <thead>
-                              <tr>
+                             \n
                                 <th>#</th><th>الاسم</th><th>التخصص</th><th>المدينة</th><th>البريد الإلكتروني</th><th>رقم الهاتف</th><th>تاريخ التسجيل</th>
-                              </tr>
+                             \n
                         </thead>
                         <tbody>
                             {% for a in all_artisans %}
-                              <tr>
+                             \n
                                  <td>{{ a.id }}</td>
                                  <td><a href="/user/{{ a.id }}">{{ a.full_name or a.username }}</a></td>
                                  <td>{{ a.specialty }}</td>
@@ -1862,7 +1837,7 @@ def admin_dashboard():
                                  <td>{{ a.email }}</td>
                                  <td>{{ a.phone or '-' }}</td>
                                  <td>{{ a.created_at.strftime('%Y-%m-%d') }}</td>
-                              </tr>
+                             \n
                             {% endfor %}
                         </tbody>
                     </table>
@@ -1906,6 +1881,23 @@ def upload_instruction_image():
     else:
         flash('نوع الملف غير مسموح به', 'danger')
     return redirect(request.referrer or url_for('index'))
+
+# ================== مسار اختبار البريد (للمسؤول فقط) ==================
+@app.route('/test-email')
+@login_required
+@admin_required
+def test_email():
+    try:
+        msg = Message(
+            subject="اختبار بريد من بريكولات",
+            recipients=['hichamcasawi709@gmail.com'],
+            html="<h2>نجاح!</h2><p>هذه رسالة اختبارية.</p>"
+        )
+        mail.send(msg)
+        return "✅ تم إرسال البريد بنجاح!"
+    except Exception as e:
+        import traceback
+        return f"❌ فشل الإرسال:<br><pre>{traceback.format_exc()}</pre>"
 
 # ================== مسارات التوافق (تحويل) ==================
 @app.route('/client-dashboard')
