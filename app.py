@@ -815,7 +815,7 @@ def logout():
 
 print("✅ الجزء الأول من المسارات تم تحميله بنجاح.")
 print("✅ أضف الآن الجزء الثاني (باقي المسارات) لإكمال الموقع.")# ============================================================
-# الجزء الثاني: جميع المسارات المتبقية (نسخة اختبار بسيطة)
+# الجزء الثاني: جميع المسارات المتبقية (مع عرض الخطأ على الشاشة)
 # ============================================================
 
 # قائمة شاملة لمدن المغرب (للاستخدام في التسجيل وإكمال الملف الشخصي)
@@ -1406,7 +1406,7 @@ def search():
     </body></html>
     ''', requests=requests, User=User)
 
-# ================== نشر طلب جديد (اختبار: إرسال بريد واحد فقط للأدمن) ==================
+# ================== نشر طلب جديد (يعرض الخطأ على الشاشة) ==================
 @app.route('/post-request', methods=['GET','POST'])
 @login_required
 def post_request():
@@ -1436,9 +1436,8 @@ def post_request():
         db.session.add(new_req)
         db.session.commit()
 
-        # ===== إرسال بريد واحد فقط للأدمن =====
+        # ===== إرسال بريد للأدمن (يظهر الخطأ على الشاشة) =====
         try:
-            print("📧 محاولة إرسال بريد للأدمن...")
             msg = Message(
                 subject=f"طلب جديد: {title}",
                 recipients=['hichamcasawi709@gmail.com'],
@@ -1452,14 +1451,10 @@ def post_request():
                 """
             )
             mail.send(msg)
-            print("✅ تم إرسال البريد للأدمن بنجاح")
             flash('✅ تم نشر الطلب وتم إرسال بريد للأدمن.', 'success')
         except Exception as e:
-            import traceback
-            print("❌ فشل إرسال البريد للأدمن:")
-            print(traceback.format_exc())
-            flash('⚠️ تم نشر الطلب لكن فشل إرسال البريد للأدمن.', 'warning')
-
+            # عرض الخطأ مباشرة للمستخدم
+            flash(f'❌ فشل إرسال البريد: {str(e)}', 'danger')
         return redirect(url_for('index'))
 
     return render_template_string('''
@@ -1858,15 +1853,19 @@ def upload_instruction_image():
         flash('نوع الملف غير مسموح به', 'danger')
     return redirect(request.referrer or url_for('index'))
 
-# ================== مسار اختبار البريد ==================
+# ================== مسار اختبار البريد (عرض الخطأ مباشرة) ==================
 @app.route('/test-email')
 @login_required
 @admin_required
 def test_email():
     try:
-        msg = Message("اختبار", recipients=['hichamcasawi709@gmail.com'], html="<h1>نجح</h1>")
+        msg = Message(
+            subject="اختبار بسيط",
+            recipients=['hichamcasawi709@gmail.com'],
+            html="<h1>الاختبار ناجح</h1>"
+        )
         mail.send(msg)
-        return "✅ تم الإرسال بنجاح"
+        return "✅ تم إرسال البريد بنجاح"
     except Exception as e:
         import traceback
         return f"❌ فشل: {e}<br><pre>{traceback.format_exc()}</pre>"
