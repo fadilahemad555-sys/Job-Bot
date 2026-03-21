@@ -598,7 +598,7 @@ def messages_list():
         </div>
     </div></body></html>''', data=data, User=User)
 
-# ================== صفحة الدردشة (تم إضافتها لضمان عدم وجود 404) ==================
+# ================== صفحة الدردشة ==================
 @app.route('/chat/<int:chat_id>', methods=['GET','POST'])
 @login_required
 def view_chat(chat_id):
@@ -1157,6 +1157,7 @@ def public_profile(user_id):
             <p class="joined">انضم {{ time_ago(user.created_at) }}</p>
             {% if is_admin_user(current_user) %}
                 <p class="text-muted">📞 {{ user.phone or 'رقم غير متوفر' }}</p>
+                <p class="text-muted">📧 {{ user.email }}</p>
             {% else %}
                 <p class="text-muted text-secondary">📞 رقم الهاتف محفوظ للمسؤول فقط</p>
             {% endif %}
@@ -1412,7 +1413,7 @@ def search():
     </body></html>
     ''', requests=requests, User=User)
 
-# ================== نشر طلب جديد (أي مستخدم مسجل) ==================
+# ================== نشر طلب جديد (مع إرسال الإشعارات لجميع المستخدمين المناسبين) ==================
 @app.route('/post-request', methods=['GET','POST'])
 @login_required
 def post_request():
@@ -1442,7 +1443,7 @@ def post_request():
         db.session.add(new_req)
         db.session.commit()
         
-        # إرسال الإشعارات للمستخدمين المهتمين (نفس التخصص والمدينة)
+        # ===== إرسال إشعارات البريد الإلكتروني لجميع المهتمين (نفس التخصص والمدينة) =====
         try:
             interested_users = User.query.filter_by(specialty=specialty, district=district).all()
             if interested_users:
@@ -1762,7 +1763,7 @@ def close_request(request_id):
         flash('غير مصرح')
     return redirect(url_for('index'))
 
-# ================== لوحة الإدارة ==================
+# ================== لوحة الإدارة (مع زر "جميع الحرفيين" وعرض البريد والهاتف) ==================
 @app.route('/admin')
 @login_required
 @admin_required
@@ -1782,6 +1783,10 @@ def admin_dashboard():
         artisan = User.query.get(c.artisan_id)
         last_msg = Message.query.filter_by(chat_id=c.id).order_by(Message.created_at.desc()).first()
         chat_data.append({'chat': c, 'client': client, 'artisan': artisan, 'last_msg': last_msg})
+    
+    # جميع الحرفيين (للعرض في صفحة الإدارة)
+    all_artisans = User.query.filter_by(user_type='artisan').all()
+    
     return render_template_string('''
     <!DOCTYPE html><html dir="rtl"><head><title>لوحة الإدارة</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -1798,13 +1803,47 @@ def admin_dashboard():
             <div class="col-md-3"><div class="card text-white bg-warning mb-3"><div class="card-body"><h5 class="card-title">العروض</h5><p class="card-text display-6">{{ total_offers }}</p></div></div></div>
             <div class="col-md-3"><div class="card text-white bg-info mb-3"><div class="card-body"><h5 class="card-title">المحادثات</h5><p class="card-text display-6">{{ total_chats }}</p></div></div></div>
         </div>
-        <div class="card admin-card"><div class="card-header bg-dark text-white">أحدث المستخدمين</div><div class="card-body"><table class="table table-sm"><thead>  </thead><tbody>{% for u in recent_users %}   <td>{{ u.id }}</td><td><a href="/user/{{ u.id }}">{{ u.full_name or u.username }}</a></td><td>{{ u.email }}</td><td>{% if u.user_type == 'client' %}زبون{% else %}حرفي{% endif %}{% if u.is_admin %} (أدمن){% endif %}</td><td>{{ u.created_at.strftime('%Y-%m-%d') }}</td>   {% endfor %}</tbody> </table></div></div>
-        <div class="card admin-card"><div class="card-header bg-dark text-white">أحدث الطلبات</div><div class="card-body"><table class="table table-sm"><thead>   <th>#</th><th>العنوان</th><th>صاحب الطلب</th><th>التخصص</th><th>الحي</th><th>التاريخ</th><th>إجراءات</th> </thead><tbody>{% for r in recent_requests %}   <td>{{ r.id }}</td><td><a href="/view-offers/{{ r.id }}">{{ r.title }}</a></td><td><a href="/user/{{ r.client.id }}">{{ r.client.full_name or r.client.username }}</a></td><td>{{ r.specialty }}</td><td>{{ r.district }}</td><td>{{ time_ago(r.created_at) }}</td><td><a href="/delete-request/{{ r.id }}" class="btn btn-danger btn-sm" onclick="return confirm('هل أنت متأكد؟')">حذف</a></td>   {% endfor %}</tbody> </table></div></div>
+        
+        <!-- جميع الحرفيين -->
+        <div class="card mb-4">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <span>جميع الحرفيين ({{ total_artisans }})</span>
+                <a href="/artisans" class="btn btn-sm btn-light">عرض في الموقع</a>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                        <thead>
+                            <tr>
+                                <th>#</th><th>الاسم</th><th>التخصص</th><th>المدينة</th><th>البريد الإلكتروني</th><th>رقم الهاتف</th><th>تاريخ التسجيل</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for a in all_artisans %}
+                            <tr>
+                                <td>{{ a.id }}</td>
+                                <td><a href="/user/{{ a.id }}">{{ a.full_name or a.username }}</a></td>
+                                <td>{{ a.specialty }}</td>
+                                <td>{{ a.district or '-' }}</td>
+                                <td>{{ a.email }}</td>
+                                <td>{{ a.phone or '-' }}</td>
+                                <td>{{ a.created_at.strftime('%Y-%m-%d') }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card admin-card"><div class="card-header bg-dark text-white">أحدث المستخدمين</div><div class="card-body"><table class="table table-sm"><thead>   <th>#</th><th>الاسم</th><th>البريد</th><th>النوع</th><th>تاريخ التسجيل</th> </thead><tbody>{% for u in recent_users %}    <tr><td>{{ u.id }}</td><td><a href="/user/{{ u.id }}">{{ u.full_name or u.username }}</a></td><td>{{ u.email }}</td><td>{% if u.user_type == 'client' %}زبون{% else %}حرفي{% endif %}{% if u.is_admin %} (أدمن){% endif %}</td><td>{{ u.created_at.strftime('%Y-%m-%d') }}</td></tr>{% endfor %}</tbody></table></div></div>
+        <div class="card admin-card"><div class="card-header bg-dark text-white">أحدث الطلبات</div><div class="card-body"><table class="table table-sm"><thead>   <th>#</th><th>العنوان</th><th>صاحب الطلب</th><th>التخصص</th><th>الحي</th><th>التاريخ</th><th>إجراءات</th> </thead><tbody>{% for r in recent_requests %}    <tr><td>{{ r.id }}</td><td><a href="/view-offers/{{ r.id }}">{{ r.title }}</a></td><td><a href="/user/{{ r.client.id }}">{{ r.client.full_name or r.client.username }}</a></td><td>{{ r.specialty }}</td><td>{{ r.district }}</td><td>{{ time_ago(r.created_at) }}</td><td><a href="/delete-request/{{ r.id }}" class="btn btn-danger btn-sm" onclick="return confirm('هل أنت متأكد؟')">حذف</a></td></tr>{% endfor %}</tbody></table></div></div>
         <div class="card admin-card"><div class="card-header bg-dark text-white">جميع المحادثات</div><div class="card-body"><div class="list-group">{% for item in chat_data %}<a href="/chat/{{ item.chat.id }}" class="list-group-item list-group-item-action"><div class="d-flex justify-content-between"><div><strong>طلب #{{ item.chat.request_id }}</strong> - <span>زبون: {{ item.client.full_name or item.client.username }}</span> - <span>حرفي: {{ item.artisan.full_name or item.artisan.username }}</span></div><small>{{ time_ago(item.chat.created_at) }}</small></div>{% if item.last_msg %}<small class="text-muted">آخر رسالة: {{ item.last_msg.content[:50] }}</small>{% endif %}</a>{% else %}<p class="text-muted">لا توجد محادثات بعد.</p>{% endfor %}</div></div></div>
     </div>
     </body></html>''', total_users=total_users, total_clients=total_clients, total_artisans=total_artisans,
     total_requests=total_requests, total_offers=total_offers, total_chats=total_chats,
-    recent_users=recent_users, recent_requests=recent_requests, chat_data=chat_data, time_ago=time_ago)
+    recent_users=recent_users, recent_requests=recent_requests, chat_data=chat_data, time_ago=time_ago,
+    all_artisans=all_artisans)
 
 # ================== رفع الصورة التعليمية ==================
 @app.route('/upload-instruction-image', methods=['POST'])
