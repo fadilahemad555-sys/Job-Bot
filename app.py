@@ -1,3 +1,4 @@
+
 # ============================================================
 # منصة بريكولات - الجزء الأول (الإعدادات + الصفحة الرئيسية)
 # مع زر تحميل APK وإشعار تسجيل الخروج ومسار الدردشة
@@ -26,15 +27,28 @@ app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///bricolets.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
 
-# ================== إعدادات البريد الإلكتروني (مضمنة) ==================
+# ================== إعدادات البريد الإلكتروني (مضمنة ومحسنة) ==================
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
 app.config['MAIL_USERNAME'] = 'hichamcasawi709@gmail.com'
-app.config['MAIL_PASSWORD'] = 'kxlafkpzbxuguida'
+app.config['MAIL_PASSWORD'] = 'kxlafkpzbxuguida'  # استخدم كلمة المرور المقدمة
 app.config['MAIL_DEFAULT_SENDER'] = 'hichamcasawi709@gmail.com'
+app.config['MAIL_USE_SSL'] = False
+app.config['MAIL_SUPPRESS_SEND'] = False
+app.config['MAIL_DEBUG'] = True  # سيساعد في عرض الأخطاء
 
+# إنشاء كائن Mail بعد الإعدادات
 mail = Mail(app)
+
+# اختبار الاتصال بالبريد فور بدء التطبيق (اختياري، لكن يساعد في اكتشاف الأخطاء مبكراً)
+try:
+    with app.app_context():
+        # محاولة الاتصال بخادم البريد (بدون إرسال)
+        mail.connect()
+        print("✅ اتصال البريد الإلكتروني ناجح.")
+except Exception as e:
+    print(f"⚠️ تحذير: فشل الاتصال بخادم البريد: {e}")
 
 # ================== إعدادات التخزين المحلي (مسار مطلق) ==================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -1447,6 +1461,7 @@ def post_request():
         try:
             interested_users = User.query.filter_by(specialty=specialty, district=district).all()
             if interested_users:
+                print(f"🔍 وجدنا {len(interested_users)} مستخدم مهتم: {[(u.id, u.email, u.full_name) for u in interested_users]}")
                 with mail.connect() as conn:
                     subject = f"🔔 طلب جديد في تخصص {specialty} بمدينة {district}"
                     body = f"""
@@ -1461,18 +1476,25 @@ def post_request():
                     <br><p>مع تحيات فريق بريكولات</p>
                     """
                     sent_count = 0
+                    failed_emails = []
                     for user in interested_users:
                         if user.email:
                             try:
                                 msg = Message(subject=subject, recipients=[user.email], html=body)
                                 conn.send(msg)
                                 sent_count += 1
+                                print(f"✅ تم إرسال البريد إلى {user.email}")
                             except Exception as inner_e:
-                                print(f"⚠️ فشل إرسال البريد إلى {user.email}: {inner_e}")
+                                print(f"❌ فشل إرسال البريد إلى {user.email}: {inner_e}")
+                                failed_emails.append(user.email)
+                        else:
+                            print(f"⚠️ المستخدم {user.id} ليس لديه بريد إلكتروني")
+                            failed_emails.append(f"مستخدم {user.id} (لا يوجد بريد)")
                     if sent_count > 0:
                         flash(f'✅ تم نشر الطلب وإرسال إشعارات إلى {sent_count} من {len(interested_users)} مستخدم مهتم', 'success')
                     else:
-                        flash('⚠️ تم نشر الطلب لكن فشل إرسال الإشعارات (لا توجد عناوين بريد صالحة)', 'warning')
+                        flash(f'⚠️ تم نشر الطلب لكن فشل إرسال الإشعارات. المستخدمون المهتمون: {len(interested_users)}، لكن لا توجد عناوين بريد صالحة أو فشل الإرسال. تفاصيل في السجلات.', 'warning')
+                        print(f"❌ جميع محاولات الإرسال فشلت. الأعطال: {failed_emails}")
             else:
                 flash('✅ تم نشر الطلب (لا يوجد مستخدمون مهتمون بهذا التخصص والمدينة حالياً)', 'success')
         except Exception as e:
@@ -1844,8 +1866,8 @@ def admin_dashboard():
             </div>
         </div>
         
-        <div class="card admin-card"><div class="card-header bg-dark text-white">أحدث المستخدمين</div><div class="card-body"><table class="table table-sm"><thead> <tr><th>#</th><th>الاسم</th><th>البريد</th><th>النوع</th><th>تاريخ التسجيل</th> </tr></thead><tbody>{% for u in recent_users %} <tr><td>{{ u.id }}</td><td><a href="/user/{{ u.id }}">{{ u.full_name or u.username }}</a></td><td>{{ u.email }}</td><td>{% if u.user_type == 'client' %}زبون{% else %}حرفي{% endif %}{% if u.is_admin %} (أدمن){% endif %}</td><td>{{ u.created_at.strftime('%Y-%m-%d') }}</td></tr>{% endfor %}</tbody></table></div></div>
-        <div class="card admin-card"><div class="card-header bg-dark text-white">أحدث الطلبات</div><div class="card-body"><table class="table table-sm"><thead> <tr><th>#</th><th>العنوان</th><th>صاحب الطلب</th><th>التخصص</th><th>الحي</th><th>التاريخ</th><th>إجراءات</th> </tr></thead><tbody>{% for r in recent_requests %} <tr><td>{{ r.id }}</td><td><a href="/view-offers/{{ r.id }}">{{ r.title }}</a></td><td><a href="/user/{{ r.client.id }}">{{ r.client.full_name or r.client.username }}</a></td><td>{{ r.specialty }}</td><td>{{ r.district }}</td><td>{{ time_ago(r.created_at) }}</td><td><a href="/delete-request/{{ r.id }}" class="btn btn-danger btn-sm" onclick="return confirm('هل أنت متأكد؟')">حذف</a></td></tr>{% endfor %}</tbody></table></div></div>
+        <div class="card admin-card"><div class="card-header bg-dark text-white">أحدث المستخدمين</div><div class="card-body"><table class="table table-sm"><thead><tr><th>#</th><th>الاسم</th><th>البريد</th><th>النوع</th><th>تاريخ التسجيل</th></tr></thead><tbody>{% for u in recent_users %}<tr><td>{{ u.id }}</td><td><a href="/user/{{ u.id }}">{{ u.full_name or u.username }}</a></td><td>{{ u.email }}</td><td>{% if u.user_type == 'client' %}زبون{% else %}حرفي{% endif %}{% if u.is_admin %} (أدمن){% endif %}</td><td>{{ u.created_at.strftime('%Y-%m-%d') }}</td></tr>{% endfor %}</tbody></table></div></div>
+        <div class="card admin-card"><div class="card-header bg-dark text-white">أحدث الطلبات</div><div class="card-body"><table class="table table-sm"><thead><tr><th>#</th><th>العنوان</th><th>صاحب الطلب</th><th>التخصص</th><th>الحي</th><th>التاريخ</th><th>إجراءات</th></tr></thead><tbody>{% for r in recent_requests %}<tr><td>{{ r.id }}</td><td><a href="/view-offers/{{ r.id }}">{{ r.title }}</a></td><td><a href="/user/{{ r.client.id }}">{{ r.client.full_name or r.client.username }}</a></td><td>{{ r.specialty }}</td><td>{{ r.district }}</td><td>{{ time_ago(r.created_at) }}</td><td><a href="/delete-request/{{ r.id }}" class="btn btn-danger btn-sm" onclick="return confirm('هل أنت متأكد؟')">حذف</a></td></tr>{% endfor %}</tbody></table></div></div>
         <div class="card admin-card"><div class="card-header bg-dark text-white">جميع المحادثات</div><div class="card-body"><div class="list-group">{% for item in chat_data %}<a href="/chat/{{ item.chat.id }}" class="list-group-item list-group-item-action"><div class="d-flex justify-content-between"><div><strong>طلب #{{ item.chat.request_id }}</strong> - <span>زبون: {{ item.client.full_name or item.client.username }}</span> - <span>حرفي: {{ item.artisan.full_name or item.artisan.username }}</span></div><small>{{ time_ago(item.chat.created_at) }}</small></div>{% if item.last_msg %}<small class="text-muted">آخر رسالة: {{ item.last_msg.content[:50] }}</small>{% endif %}</a>{% else %}<p class="text-muted">لا توجد محادثات بعد.</p>{% endfor %}</div></div></div>
     </div>
     </body></html>''', total_users=total_users, total_clients=total_clients, total_artisans=total_artisans,
