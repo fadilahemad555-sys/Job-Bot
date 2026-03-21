@@ -26,27 +26,15 @@ app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///bricolets.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
 
-# ================== إعدادات البريد الإلكتروني (مضمنة ومحسنة) ==================
+# ================== إعدادات البريد الإلكتروني (مضمنة) ==================
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
 app.config['MAIL_USERNAME'] = 'hichamcasawi709@gmail.com'
-app.config['MAIL_PASSWORD'] = 'kxlafkpzbxuguida'  # كلمة المرور الثابتة
+app.config['MAIL_PASSWORD'] = 'kxlafkpzbxuguida'
 app.config['MAIL_DEFAULT_SENDER'] = 'hichamcasawi709@gmail.com'
-app.config['MAIL_USE_SSL'] = False
-app.config['MAIL_SUPPRESS_SEND'] = False
-app.config['MAIL_DEBUG'] = True  # لعرض الأخطاء في السجلات
 
-# إنشاء كائن Mail بعد الإعدادات
 mail = Mail(app)
-
-# اختبار الاتصال بالبريد فور بدء التطبيق
-try:
-    with app.app_context():
-        mail.connect()
-        print("✅ اتصال البريد الإلكتروني ناجح.")
-except Exception as e:
-    print(f"⚠️ تحذير: فشل الاتصال بخادم البريد: {e}")
 
 # ================== إعدادات التخزين المحلي (مسار مطلق) ==================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -834,7 +822,7 @@ def logout():
 
 print("✅ الجزء الأول من المسارات تم تحميله بنجاح.")
 print("✅ أضف الآن الجزء الثاني (باقي المسارات) لإكمال الموقع.")# ============================================================
-# الجزء الثاني: جميع المسارات المتبقية (معدل للتجربة مع طباعة تفصيلية)
+# الجزء الثاني: جميع المسارات المتبقية (معدل)
 # ============================================================
 
 # قائمة شاملة لمدن المغرب (للاستخدام في التسجيل وإكمال الملف الشخصي)
@@ -1425,7 +1413,7 @@ def search():
     </body></html>
     ''', requests=requests, User=User)
 
-# ================== نشر طلب جديد (مع إرسال الإشعارات لجميع المستخدمين ذوي البريد) ==================
+# ================== نشر طلب جديد (مع إرسال إشعارات قوية للتجربة) ==================
 @app.route('/post-request', methods=['GET','POST'])
 @login_required
 def post_request():
@@ -1454,62 +1442,71 @@ def post_request():
         )
         db.session.add(new_req)
         db.session.commit()
-        
-        # ===== إرسال إشعارات البريد الإلكتروني لجميع المستخدمين ذوي البريد (للتجربة) =====
+
+        # ===== إرسال إشعارات قوية للتجربة =====
+        print("="*50)
+        print("🚀 بدء تجربة إرسال البريد الإلكتروني")
+        print(f"الطلب: {title} | تخصص: {specialty} | مدينة: {district}")
+        print("="*50)
+
         try:
-            print("📧 بدء عملية إرسال الإشعارات...")
-            # نأخذ جميع المستخدمين الذين لديهم بريد إلكتروني صالح
+            # 1. إرسال بريد تجريبي إلى الأدمن مباشرة
+            admin_email = 'hichamcasawi709@gmail.com'
+            print(f"📧 محاولة إرسال بريد تجريبي إلى {admin_email} ...")
+            test_subject = f"🔔 [تجربة] طلب جديد: {title}"
+            test_body = f"""
+            <h2>طلب جديد (رسالة تجريبية)</h2>
+            <p><strong>العنوان:</strong> {title}</p>
+            <p><strong>الوصف:</strong> {description}</p>
+            <p><strong>التخصص:</strong> {specialty}</p>
+            <p><strong>المدينة:</strong> {district}</p>
+            <p><a href="https://bricoletsapp.pythonanywhere.com/view-offers/{new_req.id}">عرض الطلب</a></p>
+            <p>هذه رسالة تجريبية للتأكد من عمل البريد.</p>
+            """
+            msg = Message(subject=test_subject, recipients=[admin_email], html=test_body)
+            mail.send(msg)
+            print(f"✅ تم إرسال البريد التجريبي إلى {admin_email}")
+
+            # 2. الآن جلب جميع المستخدمين ذوي البريد الصالح
             all_users_with_email = User.query.filter(User.email.isnot(None), User.email != '').all()
-            print(f"🔍 [TEST] عدد المستخدمين الذين لديهم بريد إلكتروني: {len(all_users_with_email)}")
+            print(f"🔍 عدد المستخدمين ذوي البريد الإلكتروني: {len(all_users_with_email)}")
             for u in all_users_with_email:
-                print(f"   - {u.id}: {u.email} | {u.full_name} | {u.specialty} | {u.district}")
-            
+                print(f"   - {u.id}: {u.email} | {u.full_name}")
+
             if all_users_with_email:
-                print("📧 جاري الاتصال بخادم البريد...")
                 with mail.connect() as conn:
-                    subject = f"🔔 [تجربة] طلب جديد: {title} (تخصص {specialty} - مدينة {district})"
+                    subject = f"🔔 طلب جديد: {title} (تخصص {specialty} - مدينة {district})"
                     body = f"""
-                    <h2>تم نشر طلب جديد (هذه رسالة تجريبية)</h2>
+                    <h2>تم نشر طلب جديد قد يهمك</h2>
                     <p><strong>العنوان:</strong> {title}</p>
                     <p><strong>الوصف:</strong> {description}</p>
                     <p><strong>التخصص المطلوب:</strong> {specialty}</p>
                     <p><strong>المدينة:</strong> {district}</p>
                     <p><strong>تاريخ النشر:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
-                    <p>لرؤية التفاصيل وتقديم عرض، يرجى زيارة الرابط التالي:</p>
                     <p><a href="https://bricoletsapp.pythonanywhere.com/view-offers/{new_req.id}">اضغط هنا لعرض الطلب</a></p>
-                    <br><p>هذه رسالة تجريبية للتأكد من وصول الإشعارات. في الإصدار النهائي، ستصل فقط لمن لهم نفس التخصص والمدينة.</p>
-                    <p>مع تحيات فريق بريكولات</p>
+                    <br><p>مع تحيات فريق بريكولات</p>
                     """
                     sent_count = 0
-                    failed_emails = []
                     for user in all_users_with_email:
                         if user.email:
                             try:
-                                print(f"📧 محاولة إرسال إلى {user.email}...")
                                 msg = Message(subject=subject, recipients=[user.email], html=body)
                                 conn.send(msg)
                                 sent_count += 1
                                 print(f"✅ تم إرسال البريد إلى {user.email}")
-                            except Exception as inner_e:
-                                print(f"❌ فشل إرسال البريد إلى {user.email}: {inner_e}")
-                                failed_emails.append(user.email)
-                        else:
-                            print(f"⚠️ المستخدم {user.id} ليس لديه بريد إلكتروني (تم تخطيه)")
-                            failed_emails.append(f"مستخدم {user.id} (لا يوجد بريد)")
-                    if sent_count > 0:
-                        flash(f'✅ تم نشر الطلب وإرسال إشعارات تجريبية إلى {sent_count} من {len(all_users_with_email)} مستخدم (بغض النظر عن التخصص والمدينة)', 'success')
-                    else:
-                        flash(f'⚠️ تم نشر الطلب لكن فشل إرسال أي إشعار. تفاصيل في السجلات.', 'warning')
-                        print(f"❌ جميع محاولات الإرسال فشلت. الأعطال: {failed_emails}")
+                            except Exception as e:
+                                print(f"❌ فشل إرسال البريد إلى {user.email}: {e}")
+                    flash(f'✅ تم نشر الطلب وإرسال إشعارات إلى {sent_count} من {len(all_users_with_email)} مستخدم', 'success')
             else:
-                flash('⚠️ لا يوجد أي مستخدم لديه بريد إلكتروني صالح في قاعدة البيانات.', 'warning')
-                print("⚠️ لا يوجد أي مستخدم لديه بريد إلكتروني صالح في قاعدة البيانات.")
+                flash('⚠️ تم نشر الطلب، ولكن لا يوجد مستخدمون لديهم بريد إلكتروني صالح.', 'warning')
+                print("⚠️ لا يوجد مستخدمون لديهم بريد إلكتروني صالح.")
+
         except Exception as e:
             print(f"❌ خطأ عام في إرسال البريد: {e}")
             flash('⚠️ تم نشر الطلب لكن فشل إرسال الإشعارات البريدية', 'warning')
-        
+
         return redirect(url_for('index'))
-    
+
     return render_template_string('''
     <!DOCTYPE html><html dir="rtl"><head><title>نشر طلب جديد</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -1868,7 +1865,7 @@ def admin_dashboard():
                               </tr>
                             {% endfor %}
                         </tbody>
-                     </table>
+                    </table>
                 </div>
             </div>
         </div>
