@@ -815,7 +815,7 @@ def logout():
 
 print("✅ الجزء الأول من المسارات تم تحميله بنجاح.")
 print("✅ أضف الآن الجزء الثاني (باقي المسارات) لإكمال الموقع.")# ============================================================
-# الجزء الثاني: جميع المسارات المتبقية (معدل مع تحسين البريد)
+# الجزء الثاني: جميع المسارات المتبقية (معدل نهائي)
 # ============================================================
 
 # قائمة شاملة لمدن المغرب (للاستخدام في التسجيل وإكمال الملف الشخصي)
@@ -1406,7 +1406,7 @@ def search():
     </body></html>
     ''', requests=requests, User=User)
 
-# ================== نشر طلب جديد (مع إرسال الإشعارات لجميع المستخدمين ذوي البريد الصالح) ==================
+# ================== نشر طلب جديد (يرسل لجميع المستخدمين ذوي البريد الصالح) ==================
 @app.route('/post-request', methods=['GET','POST'])
 @login_required
 def post_request():
@@ -1808,13 +1808,11 @@ def admin_dashboard():
                 <div class="table-responsive">
                     <table class="table table-sm table-bordered">
                         <thead>
-                             \n
-                                <th>#</th><th>الاسم</th><th>التخصص</th><th>المدينة</th><th>البريد الإلكتروني</th><th>رقم الهاتف</th><th>تاريخ التسجيل</th>
-                             \n
+                              <th>#</th><th>الاسم</th><th>التخصص</th><th>المدينة</th><th>البريد الإلكتروني</th><th>رقم الهاتف</th><th>تاريخ التسجيل</th>
                         </thead>
                         <tbody>
                             {% for a in all_artisans %}
-                             \n
+                              <tr>
                                   <td>{{ a.id }}</td>
                                   <td><a href="/user/{{ a.id }}">{{ a.full_name or a.username }}</a></td>
                                   <td>{{ a.specialty }}</td>
@@ -1822,10 +1820,10 @@ def admin_dashboard():
                                   <td>{{ a.email }}</td>
                                   <td>{{ a.phone or '-' }}</td>
                                   <td>{{ a.created_at.strftime('%Y-%m-%d') }}</td>
-                             \n
+                              </tr>
                             {% endfor %}
                         </tbody>
-                     \n
+                    </table>
                 </div>
             </div>
         </div>
@@ -1866,22 +1864,21 @@ def upload_instruction_image():
         flash('نوع الملف غير مسموح به', 'danger')
     return redirect(request.referrer or url_for('index'))
 
-# ================== مسار اختبار البريد ==================
-@app.route('/test-email')
+# ================== مسار اختبار البريد (بسيط) ==================
+@app.route('/test-email-simple')
 @login_required
 @admin_required
-def test_email():
+def test_email_simple():
     try:
         msg = Message(
-            subject="اختبار بريد من بريكولات",
+            subject="اختبار بسيط",
             recipients=['hichamcasawi709@gmail.com'],
-            html="<h2>نجاح!</h2><p>هذه رسالة اختبارية.</p>"
+            html="<h1>الاختبار ناجح</h1>"
         )
         mail.send(msg)
-        return "✅ تم إرسال البريد بنجاح!"
+        return "✅ تم إرسال البريد بنجاح"
     except Exception as e:
-        import traceback
-        return f"❌ فشل الإرسال:<br><pre>{traceback.format_exc()}</pre>"
+        return f"❌ فشل: {e}"
 
 # ================== مسار عرض المستخدمين ذوي البريد ==================
 @app.route('/list-users-email')
