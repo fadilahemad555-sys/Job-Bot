@@ -822,7 +822,7 @@ def logout():
 
 print("✅ الجزء الأول من المسارات تم تحميله بنجاح.")
 print("✅ أضف الآن الجزء الثاني (باقي المسارات) لإكمال الموقع.")# ============================================================
-# الجزء الثاني: جميع المسارات المتبقية (معدل بالكامل)
+# الجزء الثاني: جميع المسارات المتبقية (معدل)
 # ============================================================
 
 # قائمة شاملة لمدن المغرب (للاستخدام في التسجيل وإكمال الملف الشخصي)
@@ -1413,7 +1413,7 @@ def search():
     </body></html>
     ''', requests=requests, User=User)
 
-# ================== نشر طلب جديد (مع إرسال إشعارات قوية للتجربة + طباعة تفصيلية) ==================
+# ================== نشر طلب جديد (مع إرسال إشعارات قوية للتجربة) ==================
 @app.route('/post-request', methods=['GET','POST'])
 @login_required
 def post_request():
@@ -1443,13 +1443,14 @@ def post_request():
         db.session.add(new_req)
         db.session.commit()
 
-        print("="*60)
+        # ===== إرسال إشعارات قوية للتجربة =====
+        print("="*50)
         print("🚀 بدء تجربة إرسال البريد الإلكتروني")
         print(f"الطلب: {title} | تخصص: {specialty} | مدينة: {district}")
-        print("="*60)
+        print("="*50)
 
         try:
-            # 1. إرسال بريد تجريبي إلى الأدمن
+            # 1. إرسال بريد تجريبي إلى الأدمن مباشرة
             admin_email = 'hichamcasawi709@gmail.com'
             print(f"📧 محاولة إرسال بريد تجريبي إلى {admin_email} ...")
             test_subject = f"🔔 [تجربة] طلب جديد: {title}"
@@ -1466,15 +1467,13 @@ def post_request():
             mail.send(msg)
             print(f"✅ تم إرسال البريد التجريبي إلى {admin_email}")
 
-            # 2. جلب جميع المستخدمين ذوي البريد الصالح
-            print("🔍 جاري جلب المستخدمين ذوي البريد الإلكتروني...")
+            # 2. الآن جلب جميع المستخدمين ذوي البريد الصالح
             all_users_with_email = User.query.filter(User.email.isnot(None), User.email != '').all()
             print(f"🔍 عدد المستخدمين ذوي البريد الإلكتروني: {len(all_users_with_email)}")
             for u in all_users_with_email:
                 print(f"   - {u.id}: {u.email} | {u.full_name}")
 
             if all_users_with_email:
-                print("📧 جاري الاتصال بخادم البريد لإرسال الإشعارات...")
                 with mail.connect() as conn:
                     subject = f"🔔 طلب جديد: {title} (تخصص {specialty} - مدينة {district})"
                     body = f"""
@@ -1503,9 +1502,7 @@ def post_request():
                 print("⚠️ لا يوجد مستخدمون لديهم بريد إلكتروني صالح.")
 
         except Exception as e:
-            import traceback
-            print("❌ خطأ عام في إرسال البريد:")
-            print(traceback.format_exc())
+            print(f"❌ خطأ عام في إرسال البريد: {e}")
             flash('⚠️ تم نشر الطلب لكن فشل إرسال الإشعارات البريدية', 'warning')
 
         return redirect(url_for('index'))
@@ -1851,21 +1848,21 @@ def admin_dashboard():
                 <div class="table-responsive">
                     <table class="table table-sm table-bordered">
                         <thead>
-                               <tr>
+                              <tr>
                                 <th>#</th><th>الاسم</th><th>التخصص</th><th>المدينة</th><th>البريد الإلكتروني</th><th>رقم الهاتف</th><th>تاريخ التسجيل</th>
-                               </tr>
+                              </tr>
                         </thead>
                         <tbody>
                             {% for a in all_artisans %}
-                               <tr>
-                                  <td>{{ a.id }}</td>
-                                  <td><a href="/user/{{ a.id }}">{{ a.full_name or a.username }}</a></td>
-                                  <td>{{ a.specialty }}</td>
-                                  <td>{{ a.district or '-' }}</td>
-                                  <td>{{ a.email }}</td>
-                                  <td>{{ a.phone or '-' }}</td>
-                                  <td>{{ a.created_at.strftime('%Y-%m-%d') }}</td>
-                               </tr>
+                              <tr>
+                                 <td>{{ a.id }}</td>
+                                 <td><a href="/user/{{ a.id }}">{{ a.full_name or a.username }}</a></td>
+                                 <td>{{ a.specialty }}</td>
+                                 <td>{{ a.district or '-' }}</td>
+                                 <td>{{ a.email }}</td>
+                                 <td>{{ a.phone or '-' }}</td>
+                                 <td>{{ a.created_at.strftime('%Y-%m-%d') }}</td>
+                              </tr>
                             {% endfor %}
                         </tbody>
                     </table>
