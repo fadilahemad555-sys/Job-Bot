@@ -834,7 +834,7 @@ def logout():
 
 print("✅ الجزء الأول من المسارات تم تحميله بنجاح.")
 print("✅ أضف الآن الجزء الثاني (باقي المسارات) لإكمال الموقع.")# ============================================================
-# الجزء الثاني: جميع المسارات المتبقية (معدلة)
+# الجزء الثاني: جميع المسارات المتبقية (معدلة للتجربة)
 # ============================================================
 
 # قائمة شاملة لمدن المغرب (للاستخدام في التسجيل وإكمال الملف الشخصي)
@@ -1425,7 +1425,7 @@ def search():
     </body></html>
     ''', requests=requests, User=User)
 
-# ================== نشر طلب جديد (مع إرسال الإشعارات لجميع المستخدمين المناسبين) ==================
+# ================== نشر طلب جديد (مع إرسال الإشعارات لجميع المستخدمين ذوي البريد) ==================
 @app.route('/post-request', methods=['GET','POST'])
 @login_required
 def post_request():
@@ -1455,29 +1455,32 @@ def post_request():
         db.session.add(new_req)
         db.session.commit()
         
-        # ===== إرسال إشعارات البريد الإلكتروني لجميع المهتمين (نفس التخصص والمدينة) =====
+        # ===== إرسال إشعارات البريد الإلكتروني لجميع المستخدمين ذوي البريد (للتجربة) =====
         try:
-            interested_users = User.query.filter_by(specialty=specialty, district=district).all()
-            print(f"🔍 [DEBUG] تم العثور على {len(interested_users)} مستخدم مهتم (specialty={specialty}, district={district})")
-            for u in interested_users:
-                print(f"   - {u.id}: {u.email} | {u.full_name}")
-            if interested_users:
+            # نأخذ جميع المستخدمين الذين لديهم بريد إلكتروني صالح
+            all_users_with_email = User.query.filter(User.email.isnot(None), User.email != '').all()
+            print(f"🔍 [TEST] عدد المستخدمين الذين لديهم بريد إلكتروني: {len(all_users_with_email)}")
+            for u in all_users_with_email:
+                print(f"   - {u.id}: {u.email} | {u.full_name} | {u.specialty} | {u.district}")
+            
+            if all_users_with_email:
                 with mail.connect() as conn:
-                    subject = f"🔔 طلب جديد في تخصص {specialty} بمدينة {district}"
+                    subject = f"🔔 [تجربة] طلب جديد: {title} (تخصص {specialty} - مدينة {district})"
                     body = f"""
-                    <h2>تم نشر طلب جديد قد يهمك</h2>
+                    <h2>تم نشر طلب جديد (هذه رسالة تجريبية)</h2>
                     <p><strong>العنوان:</strong> {title}</p>
                     <p><strong>الوصف:</strong> {description}</p>
-                    <p><strong>التخصص:</strong> {specialty}</p>
+                    <p><strong>التخصص المطلوب:</strong> {specialty}</p>
                     <p><strong>المدينة:</strong> {district}</p>
                     <p><strong>تاريخ النشر:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
                     <p>لرؤية التفاصيل وتقديم عرض، يرجى زيارة الرابط التالي:</p>
                     <p><a href="https://bricoletsapp.pythonanywhere.com/view-offers/{new_req.id}">اضغط هنا لعرض الطلب</a></p>
-                    <br><p>مع تحيات فريق بريكولات</p>
+                    <br><p>هذه رسالة تجريبية للتأكد من وصول الإشعارات. في الإصدار النهائي، ستصل فقط لمن لهم نفس التخصص والمدينة.</p>
+                    <p>مع تحيات فريق بريكولات</p>
                     """
                     sent_count = 0
                     failed_emails = []
-                    for user in interested_users:
+                    for user in all_users_with_email:
                         if user.email:
                             try:
                                 msg = Message(subject=subject, recipients=[user.email], html=body)
@@ -1488,15 +1491,14 @@ def post_request():
                                 print(f"❌ فشل إرسال البريد إلى {user.email}: {inner_e}")
                                 failed_emails.append(user.email)
                         else:
-                            print(f"⚠️ المستخدم {user.id} ليس لديه بريد إلكتروني")
-                            failed_emails.append(f"مستخدم {user.id} (لا يوجد بريد)")
+                            print(f"⚠️ المستخدم {user.id} ليس لديه بريد إلكتروني (تم تخطيه)")
                     if sent_count > 0:
-                        flash(f'✅ تم نشر الطلب وإرسال إشعارات إلى {sent_count} من {len(interested_users)} مستخدم مهتم', 'success')
+                        flash(f'✅ تم نشر الطلب وإرسال إشعارات تجريبية إلى {sent_count} من {len(all_users_with_email)} مستخدم (بغض النظر عن التخصص والمدينة)', 'success')
                     else:
-                        flash(f'⚠️ تم نشر الطلب لكن فشل إرسال الإشعارات. المستخدمون المهتمون: {len(interested_users)}، لكن لا توجد عناوين بريد صالحة أو فشل الإرسال. تفاصيل في السجلات.', 'warning')
+                        flash(f'⚠️ تم نشر الطلب لكن فشل إرسال أي إشعار. تفاصيل في السجلات.', 'warning')
                         print(f"❌ جميع محاولات الإرسال فشلت. الأعطال: {failed_emails}")
             else:
-                flash('✅ تم نشر الطلب (لا يوجد مستخدمون مهتمون بهذا التخصص والمدينة حالياً)', 'success')
+                flash('⚠️ لا يوجد أي مستخدم لديه بريد إلكتروني صالح في قاعدة البيانات.', 'warning')
         except Exception as e:
             print(f"❌ خطأ عام في إرسال البريد: {e}")
             flash('⚠️ تم نشر الطلب لكن فشل إرسال الإشعارات البريدية', 'warning')
