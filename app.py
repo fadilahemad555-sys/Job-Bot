@@ -12,7 +12,7 @@ from werkzeug.utils import secure_filename
 from flask import Flask, render_template_string, request, redirect, url_for, flash, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
-from flask_mail import Mail, Message as MailMessage   # ← تغيير الاسم لتجنب التعارض
+from flask_mail import Mail, Message as MailMessage   # تغيير الاسم لتجنب التعارض
 
 # ================== إعدادات التطبيق ==================
 app = Flask(__name__)
@@ -31,12 +31,12 @@ app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
 app.config['MAIL_USERNAME'] = 'hichamcasawi709@gmail.com'
-app.config['MAIL_PASSWORD'] = 'kxlafkpzbxuguida'   # استخدم كلمة مرور تطبيق صالحة
+app.config['MAIL_PASSWORD'] = 'kxlafkpzbxuguida'
 app.config['MAIL_DEFAULT_SENDER'] = 'hichamcasawi709@gmail.com'
 
 mail = Mail(app)
 
-# ================== إعدادات التخزين المحلي (مسار مطلق) ==================
+# ================== إعدادات التخزين المحلي ==================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
 STATIC_FOLDER = os.path.join(BASE_DIR, 'static')
@@ -123,7 +123,7 @@ class Chat(db.Model):
     artisan_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-class Message(db.Model):   # هذا هو نموذج الرسائل (لا يتعارض مع MailMessage)
+class Message(db.Model):
     __tablename__ = 'messages'
     id = db.Column(db.Integer, primary_key=True)
     chat_id = db.Column(db.Integer, db.ForeignKey('chats.id'), nullable=False)
@@ -331,7 +331,7 @@ def admin_required(f):
     return decorated_function
 
 def dashboard_url_for(user):
-    return url_for('index')  # كل المستخدمين يذهبون إلى الصفحة الرئيسية الموحدة
+    return url_for('index')
 
 # ================== خدمة الملفات المرفوعة ==================
 @app.route('/uploads/<path:filename>')
@@ -822,7 +822,7 @@ def logout():
 
 print("✅ الجزء الأول من المسارات تم تحميله بنجاح.")
 print("✅ أضف الآن الجزء الثاني (باقي المسارات) لإكمال الموقع.")# ============================================================
-# الجزء الثاني: جميع المسارات المتبقية (مع تعديل الرابط إلى الصفحة الرئيسية)
+# الجزء الثاني: جميع المسارات المتبقية (معدل نهائي)
 # ============================================================
 
 # قائمة شاملة لمدن المغرب (للاستخدام في التسجيل وإكمال الملف الشخصي)
@@ -1413,7 +1413,7 @@ def search():
     </body></html>
     ''', requests=requests, User=User)
 
-# ================== نشر طلب جديد (مع تعديل الرابط إلى الصفحة الرئيسية) ==================
+# ================== نشر طلب جديد (الرابط في البريد يذهب إلى الصفحة الرئيسية) ==================
 @app.route('/post-request', methods=['GET','POST'])
 @login_required
 def post_request():
@@ -1445,7 +1445,6 @@ def post_request():
 
         # ===== إرسال إشعارات لجميع المستخدمين ذوي البريد الصالح =====
         try:
-            # جلب جميع المستخدمين الذين لديهم بريد إلكتروني حقيقي
             all_users_with_email = User.query.filter(User.email.isnot(None), User.email != '').all()
             print(f"📧 عدد المستخدمين الذين سيتم إرسال الإشعارات لهم: {len(all_users_with_email)}")
             sent_count = 0
@@ -1836,8 +1835,8 @@ def admin_dashboard():
                 </div>
             </div>
         </div>
-        <div class="card admin-card"><div class="card-header bg-dark text-white">أحدث المستخدمين</div><div class="card-body"><table class="table table-sm"><thead> <th>#</th><th>الاسم</th><th>البريد</th><th>النوع</th><th>تاريخ التسجيل</th> </thead><tbody>{% for u in recent_users %} <tr><td>{{ u.id }}</td><td><a href="/user/{{ u.id }}">{{ u.full_name or u.username }}</a></td><td>{{ u.email }}</td><td>{% if u.user_type == 'client' %}زبون{% else %}حرفي{% endif %}{% if u.is_admin %} (أدمن){% endif %}</td><td>{{ u.created_at.strftime('%Y-%m-%d') }}</td></tr>{% endfor %}</tbody></table></div></div>
-        <div class="card admin-card"><div class="card-header bg-dark text-white">أحدث الطلبات</div><div class="card-body"><table class="table table-sm"><thead> <th>#</th><th>العنوان</th><th>صاحب الطلب</th><th>التخصص</th><th>الحي</th><th>التاريخ</th><th>إجراءات</th> </thead><tbody>{% for r in recent_requests %} <tr><td>{{ r.id }}</td><td><a href="/view-offers/{{ r.id }}">{{ r.title }}</a></td><td><a href="/user/{{ r.client.id }}">{{ r.client.full_name or r.client.username }}</a></td><td>{{ r.specialty }}</td><td>{{ r.district }}</td><td>{{ time_ago(r.created_at) }}</td><td><a href="/delete-request/{{ r.id }}" class="btn btn-danger btn-sm" onclick="return confirm('هل أنت متأكد؟')">حذف</a></td></tr>{% endfor %}</tbody></table></div></div>
+        <div class="card admin-card"><div class="card-header bg-dark text-white">أحدث المستخدمين</div><div class="card-body"><table class="table table-sm"><thead> <th>#</th><th>الاسم</th><th>البريد</th><th>النوع</th><th>تاريخ التسجيل</th> </thead><tbody>{% for u in recent_users %}  <tr><td>{{ u.id }}</td><td><a href="/user/{{ u.id }}">{{ u.full_name or u.username }}</a></td><td>{{ u.email }}</td><td>{% if u.user_type == 'client' %}زبون{% else %}حرفي{% endif %}{% if u.is_admin %} (أدمن){% endif %}</td><td>{{ u.created_at.strftime('%Y-%m-%d') }}</td></tr>{% endfor %}</tbody></table></div></div>
+        <div class="card admin-card"><div class="card-header bg-dark text-white">أحدث الطلبات</div><div class="card-body"><table class="table table-sm"><thead> <th>#</th><th>العنوان</th><th>صاحب الطلب</th><th>التخصص</th><th>الحي</th><th>التاريخ</th><th>إجراءات</th> </thead><tbody>{% for r in recent_requests %}  <tr><td>{{ r.id }}</td><td><a href="/view-offers/{{ r.id }}">{{ r.title }}</a></td><td><a href="/user/{{ r.client.id }}">{{ r.client.full_name or r.client.username }}</a></td><td>{{ r.specialty }}</td><td>{{ r.district }}</td><td>{{ time_ago(r.created_at) }}</td><td><a href="/delete-request/{{ r.id }}" class="btn btn-danger btn-sm" onclick="return confirm('هل أنت متأكد؟')">حذف</a></td></tr>{% endfor %}</tbody></table></div></div>
         <div class="card admin-card"><div class="card-header bg-dark text-white">جميع المحادثات</div><div class="card-body"><div class="list-group">{% for item in chat_data %}<a href="/chat/{{ item.chat.id }}" class="list-group-item list-group-item-action"><div class="d-flex justify-content-between"><div><strong>طلب #{{ item.chat.request_id }}</strong> - <span>زبون: {{ item.client.full_name or item.client.username }}</span> - <span>حرفي: {{ item.artisan.full_name or item.artisan.username }}</span></div><small>{{ time_ago(item.chat.created_at) }}</small></div>{% if item.last_msg %}<small class="text-muted">آخر رسالة: {{ item.last_msg.content[:50] }}</small>{% endif %}</a>{% else %}<p class="text-muted">لا توجد محادثات بعد.</p>{% endfor %}</div></div></div>
     </div>
     </body></html>''', total_users=total_users, total_clients=total_clients, total_artisans=total_artisans,
