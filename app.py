@@ -40,7 +40,7 @@ mail = Mail(app)
 # ================== إعدادات OAuth (Google) ==================
 oauth = OAuth(app)
 
-# بيانات Google تُقرأ من متغيرات البيئة (موجودة في wsgi.py)
+# بيانات Google تُقرأ من متغيرات البيئة (الموجودة في wsgi.py)
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
 GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET')
 GOOGLE_REDIRECT_URI = 'https://bricoletsapp.pythonanywhere.com/callback/google'
@@ -245,6 +245,7 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 # ================== دوال مساعدة للتخزين المحلي ==================
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -309,6 +310,7 @@ def delete_message_image(message_id, image_url):
     return False
 
 # ================== دوال مساعدة أخرى ==================
+
 def contains_blocked_patterns(text):
     if not text: return False
     phone_pattern = r'(\+212|0)[5-7]\d{8}'
@@ -1805,23 +1807,23 @@ def admin_dashboard():
                         </thead>
                         <tbody>
                             {% for a in all_artisans %}
-                                 <tr>
-                                     <td>{{ a.id }}</td>
-                                     <td><a href="/user/{{ a.id }}">{{ a.full_name or a.username }}</a></td>
-                                     <td>{{ a.specialty }}</td>
-                                     <td>{{ a.district or '-' }}</td>
-                                     <td>{{ a.email }}</td>
-                                     <td>{{ a.phone or '-' }}</td>
-                                     <td>{{ a.created_at.strftime('%Y-%m-%d') }}</td>
-                                 </tr>
+                                   <tr>
+                                       <td>{{ a.id }}</td>
+                                       <td><a href="/user/{{ a.id }}">{{ a.full_name or a.username }}</a></td>
+                                       <td>{{ a.specialty }}</td>
+                                       <td>{{ a.district or '-' }}</td>
+                                       <td>{{ a.email }}</td>
+                                       <td>{{ a.phone or '-' }}</td>
+                                       <td>{{ a.created_at.strftime('%Y-%m-%d') }}</td>
+                                   </tr>
                             {% endfor %}
                         </tbody>
-                     </table>
+                    </table>
                 </div>
             </div>
         </div>
-        <div class="card admin-card"><div class="card-header bg-dark text-white">أحدث المستخدمين</div><div class="card-body"><table class="table table-sm"><thead> <th>#</th><th>الاسم</th><th>البريد</th><th>النوع</th><th>تاريخ التسجيل</th> </thead><tbody>{% for u in recent_users %} <tr><td>{{ u.id }}</td><td><a href="/user/{{ u.id }}">{{ u.full_name or u.username }}</a></td><td>{{ u.email }}</td><td>{% if u.user_type == 'client' %}زبون{% else %}حرفي{% endif %}{% if u.is_admin %} (أدمن){% endif %}</td><td>{{ u.created_at.strftime('%Y-%m-%d') }}</td></tr>{% endfor %}</tbody></table></div></div>
-        <div class="card admin-card"><div class="card-header bg-dark text-white">أحدث الطلبات</div><div class="card-body"><table class="table table-sm"><thead> <th>#</th><th>العنوان</th><th>صاحب الطلب</th><th>التخصص</th><th>الحي</th><th>التاريخ</th><th>إجراءات</th> </thead><tbody>{% for r in recent_requests %} <tr><td>{{ r.id }}</td><td><a href="/view-offers/{{ r.id }}">{{ r.title }}</a></td><td><a href="/user/{{ r.client.id }}">{{ r.client.full_name or r.client.username }}</a></td><td>{{ r.specialty }}</td><td>{{ r.district }}</td><td>{{ time_ago(r.created_at) }}</td><td><a href="/delete-request/{{ r.id }}" class="btn btn-danger btn-sm" onclick="return confirm('هل أنت متأكد؟')">حذف</a></td></tr>{% endfor %}</tbody></table></div></div>
+        <div class="card admin-card"><div class="card-header bg-dark text-white">أحدث المستخدمين</div><div class="card-body"><table class="table table-sm"><thead> <th>#</th><th>الاسم</th><th>البريد</th><th>النوع</th><th>تاريخ التسجيل</th> </thead><tbody>{% for u in recent_users %}   <tr><td>{{ u.id }}</td><td><a href="/user/{{ u.id }}">{{ u.full_name or u.username }}</a></td><td>{{ u.email }}</td><td>{% if u.user_type == 'client' %}زبون{% else %}حرفي{% endif %}{% if u.is_admin %} (أدمن){% endif %}</td><td>{{ u.created_at.strftime('%Y-%m-%d') }}</td></tr>{% endfor %}</tbody></table></div></div>
+        <div class="card admin-card"><div class="card-header bg-dark text-white">أحدث الطلبات</div><div class="card-body"><table class="table table-sm"><thead> <th>#</th><th>العنوان</th><th>صاحب الطلب</th><th>التخصص</th><th>الحي</th><th>التاريخ</th><th>إجراءات</th> </thead><tbody>{% for r in recent_requests %}   <tr><td>{{ r.id }}</td><td><a href="/view-offers/{{ r.id }}">{{ r.title }}</a></td><td><a href="/user/{{ r.client.id }}">{{ r.client.full_name or r.client.username }}</a></td><td>{{ r.specialty }}</td><td>{{ r.district }}</td><td>{{ time_ago(r.created_at) }}</td><td><a href="/delete-request/{{ r.id }}" class="btn btn-danger btn-sm" onclick="return confirm('هل أنت متأكد؟')">حذف</a></td></tr>{% endfor %}</tbody></table></div></div>
         <div class="card admin-card"><div class="card-header bg-dark text-white">جميع المحادثات</div><div class="card-body"><div class="list-group">{% for item in chat_data %}<a href="/chat/{{ item.chat.id }}" class="list-group-item list-group-item-action"><div class="d-flex justify-content-between"><div><strong>طلب #{{ item.chat.request_id }}</strong> - <span>زبون: {{ item.client.full_name or item.client.username }}</span> - <span>حرفي: {{ item.artisan.full_name or item.artisan.username }}</span></div><small>{{ time_ago(item.chat.created_at) }}</small></div>{% if item.last_msg %}<small class="text-muted">آخر رسالة: {{ item.last_msg.content[:50] }}</small>{% endif %}</a>{% else %}<p class="text-muted">لا توجد محادثات بعد.</p>{% endfor %}</div></div></div>
     </div>
     </body></html>''', total_users=total_users, total_clients=total_clients, total_artisans=total_artisans,
