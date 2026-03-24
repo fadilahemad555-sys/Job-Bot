@@ -1,6 +1,5 @@
 # ============================================================
-# منصة بريكولات - الجزء الأول (الإعدادات + الصفحة الرئيسية)
-# مع زر تحميل APK وإشعار تسجيل الخروج ومسار الدردشة
+# منصة بريكولات - الملف الرئيسي الكامل (مع Google OAuth)
 # ============================================================
 
 import os
@@ -845,8 +844,10 @@ def logout():
     return redirect(url_for('index'))
 
 print("✅ الجزء الأول من المسارات تم تحميله بنجاح.")
-print("✅ أضف الآن الجزء الثاني (باقي المسارات) لإكمال الموقع.")# ============================================================
-# الجزء الثاني: جميع المسارات المتبقية (مع Google OAuth)
+print("✅ أضف الآن الجزء الثاني (باقي المسارات) لإكمال الموقع.")
+
+# ============================================================
+# الجزء الثاني: جميع المسارات المتبقية (مختصر)
 # ============================================================
 
 # قائمة شاملة لمدن المغرب (للاستخدام في التسجيل وإكمال الملف الشخصي)
@@ -892,7 +893,7 @@ def google_callback():
 
     if not email:
         flash('فشل الحصول على البريد الإلكتروني من Google', 'danger')
-        return redirect(url_for('login'))
+        return redirect(url_for('login_google'))
 
     user = User.query.filter((User.email == email) | (User.google_id == google_id)).first()
     if user:
@@ -1807,18 +1808,18 @@ def admin_dashboard():
                         </thead>
                         <tbody>
                             {% for a in all_artisans %}
-                                    <tr>
-                                        <td>{{ a.id }}</td>
-                                        <td><a href="/user/{{ a.id }}">{{ a.full_name or a.username }}</a></td>
-                                        <td>{{ a.specialty }}</td>
-                                        <td>{{ a.district or '-' }}</td>
-                                        <td>{{ a.email }}</td>
-                                        <td>{{ a.phone or '-' }}</td>
-                                        <td>{{ a.created_at.strftime('%Y-%m-%d') }}</td>
-                                    </tr>
+                                     <tr>
+                                         <td>{{ a.id }}</td>
+                                         <td><a href="/user/{{ a.id }}">{{ a.full_name or a.username }}</a></td>
+                                         <td>{{ a.specialty }}</td>
+                                         <td>{{ a.district or '-' }}</td>
+                                         <td>{{ a.email }}</td>
+                                         <td>{{ a.phone or '-' }}</td>
+                                         <td>{{ a.created_at.strftime('%Y-%m-%d') }}</td>
+                                     </tr>
                             {% endfor %}
                         </tbody>
-                    </table>
+                     </table>
                 </div>
             </div>
         </div>
