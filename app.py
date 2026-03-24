@@ -83,7 +83,7 @@ os.makedirs(STATIC_FOLDER, exist_ok=True)
 db = SQLAlchemy(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = 'login_google'
+login_manager.login_view = 'login'
 
 # ================== النماذج (Models) ==================
 
@@ -1807,15 +1807,15 @@ def admin_dashboard():
                         </thead>
                         <tbody>
                             {% for a in all_artisans %}
-                                   <tr>
-                                       <td>{{ a.id }}</td>
-                                       <td><a href="/user/{{ a.id }}">{{ a.full_name or a.username }}</a></td>
-                                       <td>{{ a.specialty }}</td>
-                                       <td>{{ a.district or '-' }}</td>
-                                       <td>{{ a.email }}</td>
-                                       <td>{{ a.phone or '-' }}</td>
-                                       <td>{{ a.created_at.strftime('%Y-%m-%d') }}</td>
-                                   </tr>
+                                    <tr>
+                                        <td>{{ a.id }}</td>
+                                        <td><a href="/user/{{ a.id }}">{{ a.full_name or a.username }}</a></td>
+                                        <td>{{ a.specialty }}</td>
+                                        <td>{{ a.district or '-' }}</td>
+                                        <td>{{ a.email }}</td>
+                                        <td>{{ a.phone or '-' }}</td>
+                                        <td>{{ a.created_at.strftime('%Y-%m-%d') }}</td>
+                                    </tr>
                             {% endfor %}
                         </tbody>
                     </table>
