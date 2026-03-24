@@ -83,7 +83,7 @@ os.makedirs(STATIC_FOLDER, exist_ok=True)
 db = SQLAlchemy(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = 'login'
+login_manager.login_view = 'login_google'
 
 # ================== النماذج (Models) ==================
 
@@ -505,17 +505,17 @@ def index():
                 {% endif %}
             </div>
             <div class="action-btn-group">
-                <a href="{% if current_user.is_authenticated %}{{ url_for('post_request') }}{% else %}{{ url_for('login', next=url_for('post_request')) }}{% endif %}" class="action-btn primary">أنا صاحب منزل أحتاج معلم</a>
-                <a href="{% if current_user.is_authenticated %}{{ url_for('post_request') }}{% else %}{{ url_for('login', next=url_for('post_request')) }}{% endif %}" class="action-btn success">أنا صاحب شركة أحتاج مقاول</a>
-                <a href="{% if current_user.is_authenticated %}{{ url_for('post_request') }}{% else %}{{ url_for('login', next=url_for('post_request')) }}{% endif %}" class="action-btn warning">أنا مقاول أحتاج معلم</a>
-                <a href="{% if current_user.is_authenticated %}{{ url_for('post_request') }}{% else %}{{ url_for('login', next=url_for('post_request')) }}{% endif %}" class="action-btn info">أنا معلم أحتاج مساعد أو خدام</a>
+                <a href="{% if current_user.is_authenticated %}{{ url_for('post_request') }}{% else %}{{ url_for('login_google') }}{% endif %}" class="action-btn primary">أنا صاحب منزل أحتاج معلم</a>
+                <a href="{% if current_user.is_authenticated %}{{ url_for('post_request') }}{% else %}{{ url_for('login_google') }}{% endif %}" class="action-btn success">أنا صاحب شركة أحتاج مقاول</a>
+                <a href="{% if current_user.is_authenticated %}{{ url_for('post_request') }}{% else %}{{ url_for('login_google') }}{% endif %}" class="action-btn warning">أنا مقاول أحتاج معلم</a>
+                <a href="{% if current_user.is_authenticated %}{{ url_for('post_request') }}{% else %}{{ url_for('login_google') }}{% endif %}" class="action-btn info">أنا معلم أحتاج مساعد أو خدام</a>
             </div>
             <div class="action-btn-group">
                 <a href="/search" class="action-btn primary">جميع الطلبات في المغرب</a>
                 {% if current_user.is_authenticated %}
                 <a href="/search?district={{ current_user.district }}&specialty={{ current_user.specialty }}" class="action-btn success">طلبات في مدينتي وتخصصي</a>
                 {% else %}
-                <a href="{{ url_for('login', next=url_for('search', district='', specialty='')) }}" class="action-btn success">طلبات في مدينتي وتخصصي (سجل أولاً)</a>
+                <a href="{{ url_for('login_google') }}" class="action-btn success">طلبات في مدينتي وتخصصي (سجل أولاً)</a>
                 {% endif %}
             </div>
             <hr>
@@ -555,7 +555,7 @@ def index():
                         <p><strong>الحي:</strong> {{ req.district }}</p>
                         <p><strong>نشر:</strong> {{ time_ago(req.created_at) }}</p>
                         <p><strong>عروض:</strong> {{ req.offers_count }}/30</p>
-                        <a href="{% if current_user.is_authenticated %}/view-offers/{{ req.id }}{% else %}{{ url_for('login', next=url_for('view_offers', request_id=req.id)) }}{% endif %}" class="btn btn-sm btn-primary">عرض التفاصيل</a>
+                        <a href="{% if current_user.is_authenticated %}/view-offers/{{ req.id }}{% else %}{{ url_for('login_google') }}{% endif %}" class="btn btn-sm btn-primary">عرض التفاصيل</a>
                         {% if current_user.is_authenticated and req.status == 'open' and req.offers_count < 30 %}
                         <a href="/send-offer/{{ req.id }}" class="btn btn-sm btn-success">تقديم عرض</a>
                         {% endif %}
