@@ -12,7 +12,8 @@ from werkzeug.utils import secure_filename
 from flask import Flask, render_template_string, request, redirect, url_for, flash, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
-from flask_mail import Mail, Message as MailMessage   # ← تغيير الاسم لتجنب التعارض
+from flask_mail import Mail, Message as MailMessage
+from authlib.integrations.flask_client import OAuth
 
 # ================== إعدادات التطبيق ==================
 app = Flask(__name__)
@@ -26,17 +27,41 @@ app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///bricolets.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
 
-# ================== إعدادات البريد الإلكتروني (مضمنة) ==================
+# ================== إعدادات البريد الإلكتروني ==================
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
 app.config['MAIL_USERNAME'] = 'hichamcasawi709@gmail.com'
-app.config['MAIL_PASSWORD'] = 'kxlafkpzbxuguida'   # استخدم كلمة مرور تطبيق صالحة
+app.config['MAIL_PASSWORD'] = 'kxlafkpzbxuguida'
 app.config['MAIL_DEFAULT_SENDER'] = 'hichamcasawi709@gmail.com'
 
 mail = Mail(app)
 
-# ================== إعدادات التخزين المحلي (مسار مطلق) ==================
+# ================== إعدادات OAuth (Google) ==================
+oauth = OAuth(app)
+
+# بيانات Google تُقرأ من متغيرات البيئة (موجودة في wsgi.py)
+GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
+GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET')
+GOOGLE_REDIRECT_URI = 'https://bricoletsapp.pythonanywhere.com/callback/google'
+
+if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+    raise Exception("GOOGLE_CLIENT_ID و GOOGLE_CLIENT_SECRET غير مضبوطين في البيئة")
+
+google = oauth.register(
+    name='google',
+    client_id=GOOGLE_CLIENT_ID,
+    client_secret=GOOGLE_CLIENT_SECRET,
+    access_token_url='https://accounts.google.com/o/oauth2/token',
+    access_token_params=None,
+    authorize_url='https://accounts.google.com/o/oauth2/auth',
+    authorize_params=None,
+    api_base_url='https://www.googleapis.com/oauth2/v1/',
+    client_kwargs={'scope': 'openid email profile'},
+    redirect_uri=GOOGLE_REDIRECT_URI
+)
+
+# ================== إعدادات التخزين المحلي ==================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
 STATIC_FOLDER = os.path.join(BASE_DIR, 'static')
@@ -68,6 +93,7 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password = db.Column(db.String(200), nullable=False)
+    google_id = db.Column(db.String(100), unique=True, nullable=True)
     user_type = db.Column(db.String(20), nullable=False, default='client')
     full_name = db.Column(db.String(100), nullable=True)
     phone = db.Column(db.String(20), nullable=True)
@@ -123,7 +149,7 @@ class Chat(db.Model):
     artisan_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-class Message(db.Model):   # هذا هو نموذج الرسائل (لا يتعارض مع MailMessage)
+class Message(db.Model):
     __tablename__ = 'messages'
     id = db.Column(db.Integer, primary_key=True)
     chat_id = db.Column(db.Integer, db.ForeignKey('chats.id'), nullable=False)
@@ -154,7 +180,6 @@ with app.app_context():
     print("✅ تم التأكد من وجود الجداول.")
 
     try:
-        # تحديث كلمة سر الأدمن
         admin_user = User.query.filter_by(email='hichamcasawi709@gmail.com').first()
         if admin_user:
             admin_user.password = generate_password_hash('hi555657585959')
@@ -220,7 +245,6 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 # ================== دوال مساعدة للتخزين المحلي ==================
-
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -285,7 +309,6 @@ def delete_message_image(message_id, image_url):
     return False
 
 # ================== دوال مساعدة أخرى ==================
-
 def contains_blocked_patterns(text):
     if not text: return False
     phone_pattern = r'(\+212|0)[5-7]\d{8}'
@@ -331,7 +354,7 @@ def admin_required(f):
     return decorated_function
 
 def dashboard_url_for(user):
-    return url_for('index')  # كل المستخدمين يذهبون إلى الصفحة الرئيسية الموحدة
+    return url_for('index')
 
 # ================== خدمة الملفات المرفوعة ==================
 @app.route('/uploads/<path:filename>')
@@ -480,17 +503,17 @@ def index():
                 {% endif %}
             </div>
             <div class="action-btn-group">
-                <a href="{% if current_user.is_authenticated %}{{ url_for('post_request') }}{% else %}{{ url_for('register', next=url_for('post_request')) }}{% endif %}" class="action-btn primary">أنا صاحب منزل أحتاج معلم</a>
-                <a href="{% if current_user.is_authenticated %}{{ url_for('post_request') }}{% else %}{{ url_for('register', next=url_for('post_request')) }}{% endif %}" class="action-btn success">أنا صاحب شركة أحتاج مقاول</a>
-                <a href="{% if current_user.is_authenticated %}{{ url_for('post_request') }}{% else %}{{ url_for('register', next=url_for('post_request')) }}{% endif %}" class="action-btn warning">أنا مقاول أحتاج معلم</a>
-                <a href="{% if current_user.is_authenticated %}{{ url_for('post_request') }}{% else %}{{ url_for('register', next=url_for('post_request')) }}{% endif %}" class="action-btn info">أنا معلم أحتاج مساعد أو خدام</a>
+                <a href="{% if current_user.is_authenticated %}{{ url_for('post_request') }}{% else %}{{ url_for('login', next=url_for('post_request')) }}{% endif %}" class="action-btn primary">أنا صاحب منزل أحتاج معلم</a>
+                <a href="{% if current_user.is_authenticated %}{{ url_for('post_request') }}{% else %}{{ url_for('login', next=url_for('post_request')) }}{% endif %}" class="action-btn success">أنا صاحب شركة أحتاج مقاول</a>
+                <a href="{% if current_user.is_authenticated %}{{ url_for('post_request') }}{% else %}{{ url_for('login', next=url_for('post_request')) }}{% endif %}" class="action-btn warning">أنا مقاول أحتاج معلم</a>
+                <a href="{% if current_user.is_authenticated %}{{ url_for('post_request') }}{% else %}{{ url_for('login', next=url_for('post_request')) }}{% endif %}" class="action-btn info">أنا معلم أحتاج مساعد أو خدام</a>
             </div>
             <div class="action-btn-group">
                 <a href="/search" class="action-btn primary">جميع الطلبات في المغرب</a>
                 {% if current_user.is_authenticated %}
                 <a href="/search?district={{ current_user.district }}&specialty={{ current_user.specialty }}" class="action-btn success">طلبات في مدينتي وتخصصي</a>
                 {% else %}
-                <a href="{{ url_for('register', next=url_for('search', district='', specialty='')) }}" class="action-btn success">طلبات في مدينتي وتخصصي (سجل أولاً)</a>
+                <a href="{{ url_for('login', next=url_for('search', district='', specialty='')) }}" class="action-btn success">طلبات في مدينتي وتخصصي (سجل أولاً)</a>
                 {% endif %}
             </div>
             <hr>
@@ -530,7 +553,7 @@ def index():
                         <p><strong>الحي:</strong> {{ req.district }}</p>
                         <p><strong>نشر:</strong> {{ time_ago(req.created_at) }}</p>
                         <p><strong>عروض:</strong> {{ req.offers_count }}/30</p>
-                        <a href="{% if current_user.is_authenticated %}/view-offers/{{ req.id }}{% else %}{{ url_for('register', next=url_for('view_offers', request_id=req.id)) }}{% endif %}" class="btn btn-sm btn-primary">عرض التفاصيل</a>
+                        <a href="{% if current_user.is_authenticated %}/view-offers/{{ req.id }}{% else %}{{ url_for('login', next=url_for('view_offers', request_id=req.id)) }}{% endif %}" class="btn btn-sm btn-primary">عرض التفاصيل</a>
                         {% if current_user.is_authenticated and req.status == 'open' and req.offers_count < 30 %}
                         <a href="/send-offer/{{ req.id }}" class="btn btn-sm btn-success">تقديم عرض</a>
                         {% endif %}
@@ -814,7 +837,6 @@ def logout():
         print(f"📧 تم إرسال إشعار تسجيل الخروج إلى {user_email}")
     except Exception as e:
         print(f"⚠️ فشل إرسال بريد تسجيل الخروج: {e}")
-        # لا نعرض رسالة خطأ للمستخدم حتى لا يتأثر تجربة تسجيل الخروج
     
     logout_user()
     flash('تم تسجيل الخروج بنجاح', 'success')
@@ -822,7 +844,7 @@ def logout():
 
 print("✅ الجزء الأول من المسارات تم تحميله بنجاح.")
 print("✅ أضف الآن الجزء الثاني (باقي المسارات) لإكمال الموقع.")# ============================================================
-# الجزء الثاني: جميع المسارات المتبقية (مع استعلام مضمون للمستخدمين)
+# الجزء الثاني: جميع المسارات المتبقية (مع Google OAuth)
 # ============================================================
 
 # قائمة شاملة لمدن المغرب (للاستخدام في التسجيل وإكمال الملف الشخصي)
@@ -851,93 +873,56 @@ SPECIALTIES = [
     'بلومبي', 'نجار', 'سباك', 'كهربائي', 'رسام', 'حدائق', 'جباص', 'المنيوم', 'جلايجي', 'كباص'
 ]
 
-# ================== تسجيل الدخول ==================
-@app.route('/login', methods=['GET','POST'])
-def login():
-    if request.method == 'POST':
-        email = request.form['email']
-        password = request.form['password']
-        user = User.query.filter_by(email=email).first()
-        if user and check_password_hash(user.password, password):
-            login_user(user)
-            next_page = request.args.get('next')
-            if next_page:
-                return redirect(next_page)
-            if is_admin_user(user):
-                return redirect(url_for('admin_dashboard'))
-            if not user.profile_completed:
-                return redirect(url_for('complete_profile'))
-            return redirect(url_for('index'))
-        flash('البريد أو كلمة المرور غير صحيحة')
-    return render_template_string('''
-    <!DOCTYPE html><html dir="rtl"><head><title>تسجيل الدخول</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>.stats-mini{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.7);color:#fff;padding:5px 10px;border-radius:20px;font-size:12px;z-index:9999;opacity:0.6;}</style>
-    </head>
-    <body>
-    <div class="stats-mini">👥 {{ User.query.count() }} | 🔨 {{ User.query.filter_by(user_type='artisan').count() }}</div>
-    <div class="container" style="max-width:400px;margin-top:50px">
-        <h2 class="text-center">تسجيل الدخول</h2>
-        {% with messages = get_flashed_messages() %}{% if messages %}<div class="alert alert-danger">{{ messages[0] }}</div>{% endif %}{% endwith %}
-        <form method="POST">
-            <div class="mb-3"><input type="email" name="email" class="form-control" placeholder="البريد الإلكتروني" required></div>
-            <div class="mb-3"><input type="password" name="password" class="form-control" placeholder="كلمة المرور" required></div>
-            <button type="submit" class="btn btn-primary w-100">دخول</button>
-        </form>
-        <p class="mt-3">ليس لديك حساب؟ <a href="/register">سجل الآن</a></p>
-        <p class="mt-2 text-center"><a href="/">العودة للرئيسية</a></p>
-    </div></body></html>
-    ''', User=User)
+# ================== Google OAuth Routes ==================
+@app.route('/login-google')
+def login_google():
+    redirect_uri = url_for('google_callback', _external=True)
+    return google.authorize_redirect(redirect_uri)
 
-# ================== تسجيل جديد ==================
-@app.route('/register', methods=['GET','POST'])
-def register():
-    if request.method == 'POST':
-        email = request.form['email']
-        password = request.form['password']
-        if User.query.filter_by(email=email).first():
-            flash('البريد الإلكتروني موجود بالفعل')
-            return redirect(url_for('register'))
+@app.route('/callback/google')
+def google_callback():
+    token = google.authorize_access_token()
+    resp = google.get('userinfo')
+    user_info = resp.json()
+    email = user_info.get('email')
+    google_id = user_info.get('id')
+    name = user_info.get('name')
+
+    if not email:
+        flash('فشل الحصول على البريد الإلكتروني من Google', 'danger')
+        return redirect(url_for('login'))
+
+    user = User.query.filter((User.email == email) | (User.google_id == google_id)).first()
+    if user:
+        if not user.google_id:
+            user.google_id = google_id
+            db.session.commit()
+        login_user(user)
+        flash(f'مرحباً {user.full_name or user.username}', 'success')
+        if not user.profile_completed:
+            return redirect(url_for('complete_profile'))
+        return redirect(url_for('index'))
+    else:
         username = email.split('@')[0]
         base = username
         cnt = 1
         while User.query.filter_by(username=username).first():
             username = f"{base}{cnt}"
             cnt += 1
-        hashed = generate_password_hash(password)
-        is_admin = (email == 'hichamcasawi709@gmail.com')
         new_user = User(
             username=username,
             email=email,
-            password=hashed,
+            password=generate_password_hash(os.urandom(16).hex()),
+            google_id=google_id,
+            full_name=name,
             user_type='client',
-            is_admin=is_admin
+            is_admin=(email == 'hichamcasawi709@gmail.com')
         )
         db.session.add(new_user)
         db.session.commit()
         login_user(new_user)
-        flash('تم التسجيل بنجاح، يرجى إكمال بياناتك')
+        flash('تم التسجيل بنجاح عبر Google. يرجى إكمال بياناتك الشخصية.', 'success')
         return redirect(url_for('complete_profile'))
-    
-    return render_template_string('''
-    <!DOCTYPE html><html dir="rtl"><head><title>تسجيل جديد</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>.stats-mini{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.7);color:#fff;padding:5px 10px;border-radius:20px;font-size:12px;z-index:9999;opacity:0.6;}</style>
-    </head>
-    <body>
-    <div class="stats-mini">👥 {{ User.query.count() }} | 🔨 {{ User.query.filter_by(user_type='artisan').count() }}</div>
-    <div class="container" style="max-width:500px;margin-top:50px">
-        <h2 class="text-center">تسجيل جديد</h2>
-        {% with messages = get_flashed_messages() %}{% if messages %}<div class="alert alert-danger">{{ messages[0] }}</div>{% endif %}{% endwith %}
-        <form method="POST">
-            <div class="mb-3"><input type="email" name="email" class="form-control" placeholder="البريد الإلكتروني" required></div>
-            <div class="mb-3"><input type="password" name="password" class="form-control" placeholder="كلمة المرور" required></div>
-            <button type="submit" class="btn btn-primary w-100">تسجيل</button>
-        </form>
-        <p class="mt-3 text-center">لديك حساب؟ <a href="/login">تسجيل دخول</a></p>
-        <p class="mt-2 text-center"><a href="/">العودة للرئيسية</a></p>
-    </div></body></html>
-    ''', User=User)
 
 # ================== إكمال الملف الشخصي ==================
 @app.route('/complete-profile', methods=['GET','POST'])
@@ -1413,7 +1398,7 @@ def search():
     </body></html>
     ''', requests=requests, User=User)
 
-# ================== نشر طلب جديد (استعلام مضمون للمستخدمين) ==================
+# ================== نشر طلب جديد ==================
 @app.route('/post-request', methods=['GET','POST'])
 @login_required
 def post_request():
@@ -1443,42 +1428,34 @@ def post_request():
         db.session.add(new_req)
         db.session.commit()
 
-        # ===== إرسال إشعارات لجميع المستخدمين ذوي البريد الصالح (استعلام مضمون) =====
+        # ===== إرسال إشعارات لجميع المستخدمين ذوي البريد الصالح =====
         try:
-            # استعلام مضمون: جلب المستخدمين الذين لديهم بريد إلكتروني حقيقي
             all_users_with_email = User.query.filter(User.email != None, User.email != '').all()
-            
-            print("="*50)
-            print(f"📧 عدد المستخدمين الذين لديهم بريد إلكتروني: {len(all_users_with_email)}")
-            for u in all_users_with_email:
-                print(f"   - {u.id}: {u.email} - {u.full_name}")
-            print("="*50)
-            
-            if all_users_with_email:
-                sent_count = 0
-                for user in all_users_with_email:
-                    try:
-                        subject = f"🔔 طلب جديد: {title} (تخصص {specialty} - {district})"
-                        body = f"""
-                        <h2>طلب جديد على منصة بريكولات</h2>
-                        <p><strong>العنوان:</strong> {title}</p>
-                        <p><strong>الوصف:</strong> {description}</p>
-                        <p><strong>التخصص المطلوب:</strong> {specialty}</p>
-                        <p><strong>المدينة:</strong> {district}</p>
-                        <p><strong>نشر بواسطة:</strong> {current_user.full_name or current_user.username}</p>
-                        <p><a href="https://bricoletsapp.pythonanywhere.com/">اضغط هنا للذهاب إلى الصفحة الرئيسية وعرض جميع الطلبات</a></p>
-                        <br><p>مع تحيات فريق بريكولات</p>
-                        """
-                        msg = MailMessage(subject=subject, recipients=[user.email], html=body)
-                        mail.send(msg)
-                        sent_count += 1
-                        print(f"✅ تم إرسال البريد إلى {user.email}")
-                    except Exception as e:
-                        print(f"❌ فشل إرسال البريد إلى {user.email}: {e}")
+            print(f"📧 عدد المستخدمين الذين سيتم إرسال الإشعارات لهم: {len(all_users_with_email)}")
+            sent_count = 0
+            for user in all_users_with_email:
+                try:
+                    subject = f"🔔 طلب جديد في تخصص {specialty} - {district}"
+                    body = f"""
+                    <h2>طلب جديد على منصة بريكولات</h2>
+                    <p><strong>العنوان:</strong> {title}</p>
+                    <p><strong>الوصف:</strong> {description}</p>
+                    <p><strong>التخصص المطلوب:</strong> {specialty}</p>
+                    <p><strong>المدينة:</strong> {district}</p>
+                    <p><strong>نشر بواسطة:</strong> {current_user.full_name or current_user.username}</p>
+                    <p><a href="https://bricoletsapp.pythonanywhere.com/">اضغط هنا للذهاب إلى الصفحة الرئيسية وعرض جميع الطلبات</a></p>
+                    <br><p>مع تحيات فريق بريكولات</p>
+                    """
+                    msg = MailMessage(subject=subject, recipients=[user.email], html=body)
+                    mail.send(msg)
+                    sent_count += 1
+                    print(f"✅ تم إرسال البريد إلى {user.email}")
+                except Exception as e:
+                    print(f"❌ فشل إرسال البريد إلى {user.email}: {e}")
+            if sent_count > 0:
                 flash(f'✅ تم نشر الطلب وإرسال إشعارات إلى {sent_count} من {len(all_users_with_email)} مستخدم.', 'success')
             else:
-                flash('⚠️ لا يوجد أي مستخدم لديه بريد إلكتروني صالح.', 'warning')
-                print("⚠️ لا يوجد أي مستخدم لديه بريد إلكتروني صالح.")
+                flash('⚠️ تم نشر الطلب لكن لم يتم إرسال أي إشعار (لا يوجد مستخدمون ذوو بريد صالح).', 'warning')
         except Exception as e:
             import traceback
             print(traceback.format_exc())
@@ -1829,22 +1806,22 @@ def admin_dashboard():
                         <tbody>
                             {% for a in all_artisans %}
                                  <tr>
-                                    <td>{{ a.id }}</td>
-                                    <td><a href="/user/{{ a.id }}">{{ a.full_name or a.username }}</a></td>
-                                    <td>{{ a.specialty }}</td>
-                                    <td>{{ a.district or '-' }}</td>
-                                    <td>{{ a.email }}</td>
-                                    <td>{{ a.phone or '-' }}</td>
-                                    <td>{{ a.created_at.strftime('%Y-%m-%d') }}</td>
-                                </tr>
+                                     <td>{{ a.id }}</td>
+                                     <td><a href="/user/{{ a.id }}">{{ a.full_name or a.username }}</a></td>
+                                     <td>{{ a.specialty }}</td>
+                                     <td>{{ a.district or '-' }}</td>
+                                     <td>{{ a.email }}</td>
+                                     <td>{{ a.phone or '-' }}</td>
+                                     <td>{{ a.created_at.strftime('%Y-%m-%d') }}</td>
+                                 </tr>
                             {% endfor %}
                         </tbody>
-                    </table>
+                     </table>
                 </div>
             </div>
         </div>
-        <div class="card admin-card"><div class="card-header bg-dark text-white">أحدث المستخدمين</div><div class="card-body"><table class="table table-sm"><thead> <th>#</th><th>الاسم</th><th>البريد</th><th>النوع</th><th>تاريخ التسجيل</th> </thead><tbody>{% for u in recent_users %}  <tr><td>{{ u.id }}</td><td><a href="/user/{{ u.id }}">{{ u.full_name or u.username }}</a></td><td>{{ u.email }}</td><td>{% if u.user_type == 'client' %}زبون{% else %}حرفي{% endif %}{% if u.is_admin %} (أدمن){% endif %}</td><td>{{ u.created_at.strftime('%Y-%m-%d') }}</td></tr>{% endfor %}</tbody></table></div></div>
-        <div class="card admin-card"><div class="card-header bg-dark text-white">أحدث الطلبات</div><div class="card-body"><table class="table table-sm"><thead> <th>#</th><th>العنوان</th><th>صاحب الطلب</th><th>التخصص</th><th>الحي</th><th>التاريخ</th><th>إجراءات</th> </thead><tbody>{% for r in recent_requests %}  <tr><td>{{ r.id }}</td><td><a href="/view-offers/{{ r.id }}">{{ r.title }}</a></td><td><a href="/user/{{ r.client.id }}">{{ r.client.full_name or r.client.username }}</a></td><td>{{ r.specialty }}</td><td>{{ r.district }}</td><td>{{ time_ago(r.created_at) }}</td><td><a href="/delete-request/{{ r.id }}" class="btn btn-danger btn-sm" onclick="return confirm('هل أنت متأكد؟')">حذف</a></td></tr>{% endfor %}</tbody></table></div></div>
+        <div class="card admin-card"><div class="card-header bg-dark text-white">أحدث المستخدمين</div><div class="card-body"><table class="table table-sm"><thead> <th>#</th><th>الاسم</th><th>البريد</th><th>النوع</th><th>تاريخ التسجيل</th> </thead><tbody>{% for u in recent_users %} <tr><td>{{ u.id }}</td><td><a href="/user/{{ u.id }}">{{ u.full_name or u.username }}</a></td><td>{{ u.email }}</td><td>{% if u.user_type == 'client' %}زبون{% else %}حرفي{% endif %}{% if u.is_admin %} (أدمن){% endif %}</td><td>{{ u.created_at.strftime('%Y-%m-%d') }}</td></tr>{% endfor %}</tbody></table></div></div>
+        <div class="card admin-card"><div class="card-header bg-dark text-white">أحدث الطلبات</div><div class="card-body"><table class="table table-sm"><thead> <th>#</th><th>العنوان</th><th>صاحب الطلب</th><th>التخصص</th><th>الحي</th><th>التاريخ</th><th>إجراءات</th> </thead><tbody>{% for r in recent_requests %} <tr><td>{{ r.id }}</td><td><a href="/view-offers/{{ r.id }}">{{ r.title }}</a></td><td><a href="/user/{{ r.client.id }}">{{ r.client.full_name or r.client.username }}</a></td><td>{{ r.specialty }}</td><td>{{ r.district }}</td><td>{{ time_ago(r.created_at) }}</td><td><a href="/delete-request/{{ r.id }}" class="btn btn-danger btn-sm" onclick="return confirm('هل أنت متأكد؟')">حذف</a></td></tr>{% endfor %}</tbody></table></div></div>
         <div class="card admin-card"><div class="card-header bg-dark text-white">جميع المحادثات</div><div class="card-body"><div class="list-group">{% for item in chat_data %}<a href="/chat/{{ item.chat.id }}" class="list-group-item list-group-item-action"><div class="d-flex justify-content-between"><div><strong>طلب #{{ item.chat.request_id }}</strong> - <span>زبون: {{ item.client.full_name or item.client.username }}</span> - <span>حرفي: {{ item.artisan.full_name or item.artisan.username }}</span></div><small>{{ time_ago(item.chat.created_at) }}</small></div>{% if item.last_msg %}<small class="text-muted">آخر رسالة: {{ item.last_msg.content[:50] }}</small>{% endif %}</a>{% else %}<p class="text-muted">لا توجد محادثات بعد.</p>{% endfor %}</div></div></div>
     </div>
     </body></html>''', total_users=total_users, total_clients=total_clients, total_artisans=total_artisans,
