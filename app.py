@@ -35,7 +35,7 @@ app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '')
 app.config['MAIL_DEFAULT_SENDER'] = 'hichamcasawi709@gmail.com'
 mail = Mail(app)
 
-# ================== إعدادات OAuth (Google) ==================
+# ================== إعدادات OAuth (Google) - كما كانت تعمل ==================
 oauth = OAuth(app)
 GOOGLE_CLIENT_ID = '72444910931-8jqc98ph36rs703c4c4sp3jkqku6lvt0.apps.googleusercontent.com'
 GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
@@ -286,7 +286,7 @@ def google_callback():
     if user:
         if not user.google_id: user.google_id = google_id
         db.session.commit()
-        login_user(user, remember=True)
+        login_user(user, remember=True)  # إضافة remember=True للجلسة الدائمة
         if not user.profile_completed:
             return redirect(url_for('complete_profile'))
         return redirect(url_for('index'))
@@ -336,13 +336,10 @@ def complete_profile():
     <div class="mb-3"><label>المدينة</label><input list="cities" name="district" class="form-control" required><datalist id="cities">{% for city in MOROCCAN_CITIES %}<option value="{{ city }}">{% endfor %}</datalist></div>
     <div class="mb-3"><label>التخصص</label><select name="specialty" id="spec" class="form-select" onchange="toggleSpec()" required><option value="">اختر تخصصك</option>{% for s in SPECIALTIES %}<option value="{{ s }}">{{ s }}</option>{% endfor %}<option value="other">تخصص آخر</option></select><input type="text" name="other_specialty" id="other_spec" class="form-control mt-2" style="display:none;" placeholder="اكتب تخصصك"></div>
     <button type="submit" class="btn btn-primary w-100">تم</button></form></div></body></html>
-    ''', MOROCCAN_CITIES=MOROCCAN_CITIES, SPECIALTIES=SPECIALTIES)
-
-# ================== الصفحة الرئيسية (جزء ثاني سيأتي في الرسالة القادمة) ==================
-# سيتم إكمالها في الجزء الثاني...# ================== الصفحة الرئيسية ==================
+    ''', MOROCCAN_CITIES=MOROCCAN_CITIES, SPECIALTIES=SPECIALTIES)# ================== الصفحة الرئيسية ==================
 @app.route('/')
 def index():
-    # زائر غير مسجل
+    # زائر غير مسجل - يرى فقط زر Google
     if not current_user.is_authenticated:
         total_clients = User.query.filter_by(user_type='client').count()
         total_artisans = User.query.filter_by(user_type='artisan').count()
@@ -352,15 +349,18 @@ def index():
         <style>body{background:#f5f5f5;display:flex;justify-content:center;align-items:center;height:100vh;}.card{max-width:400px;padding:30px;border-radius:20px;text-align:center;background:white;}.btn-google{background:#4285f4;color:white;padding:12px;border-radius:40px;text-decoration:none;display:block;font-weight:bold;}</style>
         </head><body><div class="card shadow"><h2>🔨 بريكولات</h2><p>منصة الحرفيين في المغرب</p><a href="{{ url_for('login_google') }}" class="btn-google">📱 تسجيل الدخول عبر Google</a><small class="d-block mt-3">👥 {{ total_clients }} زبون | 🔨 {{ total_artisans }} حرفي</small></div></body></html>
         ''', total_clients=total_clients, total_artisans=total_artisans)
-    # مستخدم لم يكمل ملفه
+    
+    # مستخدم مسجل لكن لم يكمل الملف
     if not current_user.profile_completed:
         return redirect(url_for('complete_profile'))
-    # مستخدم كامل الملف
+    
+    # مستخدم مسجل وكامل الملف - الصفحة الكاملة
     total_clients = User.query.filter_by(user_type='client').count()
     total_artisans = User.query.filter_by(user_type='artisan').count()
     all_requests = Request.query.filter_by(status='open').order_by(Request.created_at.desc()).all()
     my_requests = Request.query.filter_by(client_id=current_user.id).order_by(Request.created_at.desc()).all()
     unread = get_unread_messages_count(current_user.id)
+    
     return render_template_string('''
     <!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>بريكولات</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -474,7 +474,7 @@ def profile():
         if 'profile_image' in request.files:
             f = request.files['profile_image']
             if f and f.filename:
-                if current_user.profile_image and current_user.profile_image.startswith('/uploads/'):
+                if current_user.profile_image:
                     delete_file(current_user.profile_image)
                 url = save_file_to_local(f, subfolder=f"users/{current_user.id}")
                 if url:
@@ -482,7 +482,7 @@ def profile():
         if 'video_work' in request.files:
             f = request.files['video_work']
             if f and f.filename:
-                if current_user.video_work and current_user.video_work.startswith('/uploads/'):
+                if current_user.video_work:
                     delete_file(current_user.video_work)
                 url = save_file_to_local(f, subfolder=f"artisans/{current_user.id}")
                 if url:
@@ -604,6 +604,7 @@ def view_offers(request_id):
     <body><div class="container mt-5"><h1>عروض الطلب: {{ req.title }}</h1><div class="row">{% for o in offers %}<div class="col-md-4 mb-3"><div class="card"><div class="card-body"><h5>{{ o.artisan.full_name }}</h5><p>{{ o.message }}</p>{% if o.images %}<a href="{{ o.images }}" target="_blank">📷 صور</a>{% endif %}</div></div></div>{% endfor %}</div><a href="/" class="btn btn-secondary">رجوع</a></div></body></html>
     ''', req=req, offers=offers)
 
+
 @app.route('/delete-request/<int:request_id>')
 @login_required
 def delete_request(request_id):
@@ -692,3 +693,4 @@ def upload_cover_image():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
